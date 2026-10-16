@@ -28,7 +28,7 @@ html.touch .prompt kbd { min-width: 44px; height: 44px; font-size: 26px; backgro
 
 /* Portrait: ask for landscape. */
 .tc-rotate { display: none; position: fixed; inset: 0; z-index: 2000; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: #fff; pointer-events: auto;
-  background: linear-gradient(#e0a24a, #7a3d16); }
+  background: linear-gradient(#d9ecfb, #5f8fbf); }
 .tc-rotate div { font-size: 90px; line-height: 1; animation: tc-turn 2.4s ease-in-out infinite; }
 .tc-rotate p { margin: 0; font-size: 32px; font-weight: 700; -webkit-text-stroke: 5px #3a3a3a; paint-order: stroke fill; }
 .tc-rotate small { font-size: 16px; opacity: 0.85; }

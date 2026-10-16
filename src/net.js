@@ -3,11 +3,12 @@
 // the leaderboards. Never throws and never blocks play: with no server (or an unreachable one)
 // the game simply runs offline on local state.
 import { Client } from '@colyseus/sdk'
-import { DEV_MODE, GAME_SLUG, NET, SERVER_URL, TUTORIAL } from './config.js'
+import { DEV_MODE, DEV_USER_ID, GAME_SLUG, NET, SERVER_URL, TUTORIAL } from './config.js'
 import { authState, sdk, getEquippedAvatar, getProportions, getSkinTextureUrl, subscribeAuth } from './bloxity.js'
 import { notify, setServerTime, state, subscribe } from './state.js'
 import { applyUpgrades } from './upgrades.js'
 import { markLoaded } from './loading.js'
+import { ITEM_INFO } from './data/loot.js'
 
 // The keys the server persists (backend src/sanitize.ts).
 const SAVED = ['cash', 'power', 'leaves', 'level', 'xp', 'xpNext', 'rebirths', 'bag', 'sellLocked', 'discovered', 'vacuumOwned', 'vacuum', 'playSeconds', 'giftClaimed', 'auraOwned', 'aura', 'upgrades', 'dailyDay', 'dailyClaimedAt', 'boosts', 'tutorialStep', 'controlsDone']
@@ -48,6 +49,7 @@ function guestId() {
 const GUEST = guestId()
 
 function identity() {
+  if (DEV_USER_ID && !authState.user) return { userId: DEV_USER_ID, username: DEV_USER_ID }
   const u = authState.user
   const id = u && (u._id || u.id || u.userId || u.uid)
   if (!id) return { userId: GUEST, username: authState.guest?.displayName || authState.guest?.username || 'Guest' }
@@ -102,6 +104,9 @@ function scheduleSave() {
 
 function hydrate(doc) {
   for (const k of SAVED) if (doc[k] !== undefined) state[k] = doc[k]
+  // Saves from before the snow loot set name items that no longer exist: drop them.
+  if (Array.isArray(state.discovered)) state.discovered = state.discovered.filter((n) => n in ITEM_INFO)
+  if (Array.isArray(state.bag)) state.bag = state.bag.filter((it) => it && it.name in ITEM_INFO)
   state.boosts = { power: 0, cash: 0, ...state.boosts }
   applyUpgrades()
   lastSaved = snapshot() // what the server holds: don't echo it straight back

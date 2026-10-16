@@ -93,7 +93,7 @@
 }
 .stat i { width: 34px; height: 34px; display: block; flex: none; }
 .stat.emote { color: #ffd21a; font-size: 26px; }
-.stat.leaf { color: #8cff5a; }
+.stat.leaf { color: #aee4ff; }
 .stat.cash { width: 255px; height: 60px; font-size: 38px; color: #9cff5a; margin-top: 6px; border: 3px solid #121212; }
 .stat.cash i { width: 48px; height: 40px; }
 
@@ -105,7 +105,7 @@
   background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.28) 3px, transparent 4px); background-size: 20px 20px; }
 .level .lv { position: absolute; left: 56px; top: 2px; font-size: 44px; line-height: 50px; }
 .level .xp { position: absolute; right: 12px; top: 4px; font-size: 36px; line-height: 46px; }
-/* In the leaf corridor: Home button replaces the level bar; menu tiles hide. */
+/* In the Snowfields: Home button replaces the level bar; menu tiles hide. */
 .home-btn { display: none; position: absolute; left: -150px; top: 15px; width: 300px; height: 84px; background: #5ec8ff; border: 5px solid #1a1a1a; border-radius: 10px; cursor: pointer; }
 .home-btn span { font-size: 54px; line-height: 70px; }
 .home-btn { display: block; opacity: 0; visibility: hidden; transform: translateY(-30px) scale(0.8); transition: opacity 0.3s ease, transform 0.3s ease, visibility 0s 0.3s; }
@@ -169,7 +169,7 @@ body.win-open > canvas { filter: blur(6px); }
 .chop-pop { position: absolute; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%); pointer-events: none; animation: chop-rise 900ms ease-out forwards; }
 .chop-pop-row { display: flex; align-items: center; gap: 6px; font-size: 38px; font-weight: 700; color: #ffd77a; }
 .chop-pop-row .o { -webkit-text-stroke-width: 7px; }
-.chop-pop-ico { display: block; width: 44px; height: 44px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(120, 230, 255, 0.9)); animation: pop-whirl 900ms cubic-bezier(0.3, 0.6, 0.5, 1) forwards; }
+.chop-pop-ico { display: block; line-height: 0; width: 44px; height: 44px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(120, 230, 255, 0.9)); animation: pop-whirl 900ms cubic-bezier(0.3, 0.6, 0.5, 1) forwards; }
 @keyframes pop-whirl {
   0% { transform: rotate(0deg) scale(0.4); }
   25% { transform: rotate(240deg) scale(1.25); }
@@ -233,7 +233,7 @@ body.win-open > canvas { filter: blur(6px); }
 .ubtn.gems span { display: inline-flex; align-items: center; gap: 6px; }
 .ubtn.gems i { width: 30px; height: 30px; display: inline-block; color: #fff; filter: drop-shadow(0 0 0 #121212) drop-shadow(0 2px 0 #121212); }
 
-/* --- corridor progress track (left) ------------------------------------ */
+/* --- Snowfields progress track (left) ------------------------------------ */
 .trail { position: absolute; left: 100px; top: 250px; width: 44px; height: 400px; }
 .trail-flag { position: absolute; left: 50%; top: -34px; transform: translateX(-50%); font-style: normal; font-size: 28px; }
 .trail-bar { position: absolute; inset: 0; display: flex; flex-direction: column; border: 3px solid #141414; border-radius: 22px; background: #141414; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15); }

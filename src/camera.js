@@ -19,7 +19,7 @@ export function setCameraSensitivity(value) {
   sensitivity = value
 }
 
-// Extra FOV (degrees) from other systems, e.g. the blower's power punch.
+// Extra FOV (degrees) from other systems.
 let fovExtra = 0
 export function setFovExtra(degrees) {
   fovExtra = degrees

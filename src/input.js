@@ -5,7 +5,7 @@ export const inputState = {
   look: { dx: 0, dy: 0 }, // raw pixels since the camera last read them
   zoom: 0, // wheel notches since the camera last read them (+ = away)
   jump: false,
-  blow: false, // leaf blower held down (left mouse on the canvas, or F)
+  blow: false, // shovel dig held down (left mouse on the canvas, or F)
   interact: false, // E pressed since interact.js last looked
 }
 

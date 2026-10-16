@@ -1,13 +1,13 @@
-// Leaf piles: the field grid (see leaves.js) tiled into piles, per zone. A pile is the unit
+// Leaf piles: the field grid (see snow.js) tiled into piles, per zone. A pile is the unit
 // that drops loot; its hardness grows with its zone's Luck, like a tree's hp in the reference.
-import { LEAVES } from './config.js'
+import { SNOW } from './config.js'
 
-const Z = LEAVES.zones
-const P = LEAVES.piles
+const Z = SNOW.zones
+const P = SNOW.piles
 export const ZONE_COUNT = Z.edges.length - 1
 
 // hp of a pile in zone `zi`: clear time ~ hp / blowerPower.
-export const zoneHp = (zi) => P.baseHp * Z.luck[zi] ** P.exponent
+export const zoneHp = (zi) => P.baseHp * P.hardness * Z.luck[zi] ** P.exponent
 
 // Zone of a world x (zone i spans edges[i+1] <= x < edges[i]); matches zoneOf() in the shaders.
 export function zoneAt(x) {

@@ -1,4 +1,4 @@
-// Everything standing in the hub: shop stands with their NPCs, leaderboards,
+// Everything standing in the hub: shop stands with their NPCs, the leaderboard hall (leaderboardHall.js),
 // the Worlds portal, the training mounds,
 // the vacuum showcase and the zone signs on the field. Decorative (the Sell Loot stand is driven by sell.js):
 // solid (colliders) but not interactive.
@@ -30,15 +30,19 @@ import {
   SRGBColorSpace,
 } from 'three'
 import { addCollider } from './colliders.js'
-import { HUB_COLORS as C, LEAVES, VACUUMS, SELL_STAND, AURA_STAND, WORLD_PORTAL } from './config.js'
+import { HUB_COLORS as C, SNOW, VACUUMS, SELL_STAND, AURA_STAND, VACUUM_STAND, UPGRADE_STAND, HUB, WORLD_PORTAL } from './config.js'
 import { player } from './player.js'
+import { offer } from './interact.js'
+import { enterFrostRealm, leaveFrostRealm, realm } from './frostRealm.js'
+import { zoneAt } from './piles.js'
 import { RARITY, zoneTier } from './data/loot.js'
 import { drawText, loadIcon, panel, textLabel } from './labels.js'
 import { mesh, studMat, worldBox } from './hub.js'
 import { plankTexture, stripeTexture, stripeTextureV } from './textures.js'
 import { shortMoney, state } from './state.js'
-import { net, onLeaderboard } from './net.js'
 import { createTrainingPile } from './trainingPile.js'
+import { buildLeaderboardHall } from './leaderboardHall.js'
+import { buildPortalFx } from './portalFx.js'
 
 const std = (color, extra = {}) => new MeshStandardMaterial({ color, roughness: 0.8, ...extra })
 const plankMat = (col) => new MeshStandardMaterial({ map: plankTexture(col), roughness: 0.85 })
@@ -144,60 +148,8 @@ function stand(parent, { x, z, y = 0, rot, awning, title, titleFill, titleStroke
   const label = textLabel(title, { height: 1.7, px: 110, fill: titleFill, stroke: titleStroke })
   label.object.position.set(0, 6, 0)
   g.add(label.object)
-  addCollider(x, z, 5.4, 3.6, y + 3.8, rot, y)
+  person.userData.stand = { group: g, box: addCollider(x, z, 5.4, 3.6, y + 3.8, rot, y) } // moved under the Frost Realm (frostRealm.js)
   return person
-}
-
-// --- Leaderboards ------------------------------------------------------------------
-
-function leaderboard(parent, x, z, rot, key, title, titleFill, valueHeader, valueColor) {
-  const g = placed(parent, x, 0, z, rot)
-  const wood = std(C.boardWood)
-  for (const sx of [-2.0, 2.0]) g.add(mesh(new BoxGeometry(0.4, 2, 0.4), wood, sx, 1, 0))
-  g.add(mesh(new BoxGeometry(4.8, 5.6, 0.4), wood, 0, 4.6, 0))
-  // Empty until the server's leaderboard arrives (net.js); then the live top 10.
-  let rows = []
-  const board = panel(
-    512,
-    600,
-    (ctx, w, h) => {
-      ctx.fillStyle = C.boardPanel
-      ctx.fillRect(0, 0, w, h)
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i].me) {
-          ctx.fillStyle = 'rgba(122,255,74,0.28)'
-          ctx.fillRect(8, 86 + i * 50 - 25, w - 16, 48)
-          ctx.strokeStyle = '#7aff4a'
-          ctx.lineWidth = 3
-          ctx.strokeRect(8, 86 + i * 50 - 25, w - 16, 48)
-        }
-        ctx.fillStyle = 'rgba(0,0,0,0.12)'
-        ctx.fillRect(0, 86 + i * 50 + 22, w, 4)
-      }
-      drawText(ctx, 'Player', 140, 34, { px: 30, fill: '#62b4ff', strokeW: 3, shadow: false })
-      drawText(ctx, valueHeader, 400, 34, { px: 30, fill: valueColor, strokeW: 3, shadow: false })
-      const rankFill = ['#ffd84a', '#d8e2ee', '#e89a5a']
-      rows.forEach((r, i) => {
-        const y = 86 + i * 50
-        const max = r.me ? 8 : 12
-        const name = r.name.length > max ? `${r.name.slice(0, max - 1)}…` : r.name
-        drawText(ctx, `#${i + 1} @${name}${r.me ? ' (You)' : ''}`, 40, y, { px: 30, fill: r.me ? '#7aff4a' : rankFill[i] ?? '#ffffff', strokeW: 3, shadow: false, align: 'left' })
-        drawText(ctx, r.value, 400, y, { px: 30, fill: '#ffffff', strokeW: 3, shadow: false })
-      })
-    },
-    { height: 5.0, width: 4.25 },
-  )
-  onLeaderboard((boards) => {
-    const live = boards[key]
-    rows = (live ?? []).map((r) => ({ name: r.name, value: shortMoney(r.value), me: r.id === net.sessionId }))
-    board.repaint()
-  })
-  board.object.position.set(0, 4.6, 0.21)
-  g.add(board.object)
-  const label = textLabel(title, { height: title.length > 8 ? 1.0 : 1.4, px: 100, fill: titleFill, billboard: false })
-  label.object.position.set(0, 8.2, 0.1)
-  g.add(label.object)
-  addCollider(x, z, 4.8, 0.6, 7.4, rot)
 }
 
 // --- Controls board ---------------------------------------------------------------
@@ -206,7 +158,7 @@ function leaderboard(parent, x, z, rot, key, title, titleFill, valueHeader, valu
 const CONTROL_ROWS = [
   ['Move', ['W', 'A', 'S', 'D']],
   ['Jump', ['SPACE']],
-  ['Blow Leaves', ['F', 'or', 'CLICK']],
+  ['Dig Snow', ['F', 'or', 'CLICK']],
   ['Look', ['MOUSE']],
   ['Zoom', ['WHEEL']],
   ['Interact', ['E']],
@@ -299,7 +251,9 @@ function portal(parent, x, z, rot) {
   const purple = studMat('#9a34e6', '#8526d4', 1)
   for (const s of [-1, 1]) g.add(mesh(worldBox(1.3, 6.2, 1.4, 2), purple, s * 2.55, 3.7, 0))
   g.add(mesh(worldBox(6.4, 1.1, 1.6, 2), studMat('#2f72e8', '#245fd0', 1), 0, 7.35, 0))
-  g.add(mesh(new BoxGeometry(3.8, 6.2, 0.4), new MeshBasicMaterial({ color: '#05050a' }), 0, 3.7, 0))
+  g.add(mesh(new BoxGeometry(3.8, 6.2, 0.3), new MeshBasicMaterial({ color: '#05050a' }), 0, 3.7, -0.05))
+  purple.emissive.set('#8a2bd0')
+  const fx = buildPortalFx(g)
   const label = textLabel('Worlds', { height: 1.5, px: 100, fill: ['#ffc4ff', '#c45cf0', '#8a2bd0'], stroke: '#2a0a3a' })
   label.object.position.set(0, 9.6, 0)
   g.add(label.object)
@@ -316,10 +270,20 @@ function portal(parent, x, z, rot) {
   lock.object.visible = false
   g.add(lock.object)
   return {
-    update() {
+    update(dt, t) {
       const dx = player.position.x - x
       const dz = player.position.z - z
-      lock.object.visible = state.level < WORLD_PORTAL.unlockLevel && dx * dx + dz * dz < WORLD_PORTAL.near ** 2
+      const d2 = dx * dx + dz * dz
+      const near = d2 < WORLD_PORTAL.near ** 2
+      // In the Frost Realm the portal leads home; going in needs the level (the dev server skips the gate).
+      const unlocked = realm.active || import.meta.env.DEV || state.level >= WORLD_PORTAL.unlockLevel
+      lock.object.visible = !unlocked && near
+      if (unlocked && near) {
+        if (realm.active) offer('Return to the Snow Hub', leaveFrostRealm, Math.sqrt(d2))
+        else offer('Enter the Frost Realm', enterFrostRealm, Math.sqrt(d2))
+      }
+      fx.update(dt, t, Math.sqrt(d2), !unlocked)
+      purple.emissiveIntensity = 0.5 + Math.sin(t * 2.2) * 0.25
     },
   }
 }
@@ -328,12 +292,12 @@ function portal(parent, x, z, rot) {
 
 const REBIRTH_ICON = loadIcon(`${import.meta.env.BASE_URL}UI/rebirth.png`)
 
-function mound(parent, x, y, z, { color, cost, mult, lava = false }, seed, floorAt) {
+function mound(parent, x, y, z, { color, pileColor = color, cost, mult, lava = false }, seed, floorAt) {
   const g = placed(parent, x, y, z)
   const pc = new Color(color)
   g.add(mesh(new BoxGeometry(3.6, 0.16, 3.6), std('#' + pc.clone().multiplyScalar(0.55).getHexString()), 0, 0.08, 0))
   g.add(mesh(new BoxGeometry(3.1, 0.18, 3.1), std('#' + pc.clone().lerp(new Color('#ffffff'), 0.35).getHexString()), 0, 0.09, 0))
-  const pile = createTrainingPile({ x, y, z, color, lava, seed, floorAt })
+  const pile = createTrainingPile({ x, y, z, color: pileColor, lava, seed, floorAt })
   g.add(pile.group)
   const lines = []
   lines.push(cost ? { text: `${cost}`, px: 54, fill: '#ff9cf0', icon: REBIRTH_ICON } : { text: 'FREE', px: 54, fill: '#9cff7a' })
@@ -345,18 +309,6 @@ function mound(parent, x, y, z, { color, cost, mult, lava = false }, seed, floor
 }
 
 // --- Vacuum showcase ------------------------------------------------------------
-
-const TWIN = VACUUMS.find((v) => v.id === 'twin')
-// Banner line: the unlock level until reached, then the price.
-const twinPriceLine = () =>
-  state.level < TWIN.unlockLevel
-    ? { text: `Unlocks at Level ${TWIN.unlockLevel}`, px: 60, fill: ['#ffb0b0', '#ff4a4a'], stroke: '#3a0000' }
-    : { text: `$${shortMoney(TWIN.cost)}`, px: 60, fill: ['#fff27a', '#ffb81a'], stroke: '#3a2a00' }
-const twinBanner = () => [
-  { text: 'Twin Turbine Vacuum', px: 64, fill: ['#ff9cf0', '#e43cc8'] },
-  { text: 'Always 400% Better!', px: 56, fill: ['#9cff7a', '#3ad21a'] },
-  twinPriceLine(),
-]
 
 function vacuumModel() {
   const g = new Group()
@@ -514,7 +466,7 @@ function streakTexture() {
   t.colorSpace = SRGBColorSpace
   return t
 }
-function leafTexture() {
+function snowTexture() {
   const c = document.createElement('canvas')
   c.width = c.height = 32
   const x = c.getContext('2d')
@@ -628,20 +580,20 @@ function turbineFx(g) {
   const IN = 110
   const OUT = 130
   const DUST = 48
-  const LEAVES = 36
+  const FLAKES = 36
   const motes = mk(IN, 0.2)
   const sparks = mk(OUT, 0.24)
   const dust = mk(DUST, 0.7, { opacity: 0.35 })
   const leavesGeo = new BufferGeometry()
-  leavesGeo.setAttribute('position', new BufferAttribute(new Float32Array(LEAVES * 3), 3))
-  leavesGeo.setAttribute('color', new BufferAttribute(new Float32Array(LEAVES * 3), 3))
-  const leaves = new Points(leavesGeo, new PointsMaterial({ map: leafTexture(), size: 0.2, vertexColors: true, transparent: true, alphaTest: 0.4, depthWrite: false }))
+  leavesGeo.setAttribute('position', new BufferAttribute(new Float32Array(FLAKES * 3), 3))
+  leavesGeo.setAttribute('color', new BufferAttribute(new Float32Array(FLAKES * 3), 3))
+  const leaves = new Points(leavesGeo, new PointsMaterial({ map: snowTexture(), size: 0.2, vertexColors: true, transparent: true, alphaTest: 0.4, depthWrite: false }))
   leaves.frustumCulled = false
   g.add(leaves)
   const moteSeeds = Array.from({ length: IN }, (_, i) => ({ s: sides[i % 2], a: Math.random() * 6.28, f: Math.random(), v: 0.8 + Math.random() * 0.9 }))
   const sparkSeeds = Array.from({ length: OUT }, () => ({ a: Math.random() * 6.28, f: Math.random(), v: 1.1 + Math.random() * 1.5, r: Math.random() * 0.3 }))
   const dustSeeds = Array.from({ length: DUST }, () => ({ a: Math.random() * 6.28, r: 1.4 + Math.random() * 2.2, v: 1.5 + Math.random() * 2, y: Math.random() * 0.5 }))
-  const leafSeeds = Array.from({ length: LEAVES }, (_, i) => ({ s: sides[i % 2], a: Math.random() * 6.28, f: Math.random(), v: 0.5 + Math.random() * 0.5, c: new Color().setHSL(0.08 + Math.random() * 0.25, 0.7, 0.35 + Math.random() * 0.15) }))
+  const leafSeeds = Array.from({ length: FLAKES }, (_, i) => ({ s: sides[i % 2], a: Math.random() * 6.28, f: Math.random(), v: 0.5 + Math.random() * 0.5, c: new Color().setHSL(0.55 + Math.random() * 0.08, 0.5, 0.82 + Math.random() * 0.14) }))
 
   return {
     update(t) {
@@ -763,34 +715,36 @@ export function buildProps(scene) {
   const npcs = []
 
   // North: Worlds portal, Sell Loot with the three leaderboards behind it.
-  const worldPortal = portal(root, -17, -21, facing(-17, -21, 0, 4))
-  npcs.push(stand(root, { x: SELL_STAND.x, z: SELL_STAND.z, rot: 0.08, awning: ['#2fd14a', '#f4f4f4'], title: 'Sell Loot', titleFill: ['#f6ff7a', '#b6f22a', '#5fc81a'] }))
-  leaderboard(root, -6, -22.5, 0.05, 'power', 'Power', ['#ffe48a', '#f6a21a'], 'Power', '#ffb23a')
-  leaderboard(root, 4.5, -24, 0, 'rebirths', 'Rebirths', ['#ff8a8a', '#e2222a'], 'Rebirths', '#ff5a5a')
-  leaderboard(root, 14, -23, -0.2, 'leaves', 'Leaves Cleaned', ['#c4ff7a', '#4cc81a'], 'Leaves', '#7aff4a')
-  leaderboard(root, 23, -23.5, -0.3, 'level', 'Levels', ['#a8e4ff', '#1f9bff'], 'Level', '#62c4ff')
-
-  // Beside the west opening (left as you walk out to the field): the controls reference.
-  const controls = controlsBoard(root, -23, 19.5, facing(-23, 19.5, 0, 4))
-  window.addEventListener('controls-done', () => controls.show(5)) // hud.js, after the guide is completed
+  const worldPortal = portal(root, -14, -34, facing(-14, -34, 8, 0))
+  // The four shop stands, for the Frost Realm to rearrange: `cfg` is the live position the stand's
+  // window/prompt reads (config.js), `home` where it stands in the main world.
+  const stands = []
+  const addStand = (name, cfg, opts) => {
+    const person = stand(root, { x: cfg.x, z: cfg.z, rot: cfg.rot, ...opts })
+    npcs.push(person)
+    stands.push({ name, cfg, home: { x: cfg.x, z: cfg.z, rot: cfg.rot }, ...person.userData.stand })
+  }
+  addStand('sell', SELL_STAND, { awning: ['#2fd14a', '#f4f4f4'], title: 'Sell Loot', titleFill: ['#f6ff7a', '#b6f22a', '#5fc81a'] })
+  const hall = buildLeaderboardHall(root)
 
   // East: Auras, Upgrades.
-  npcs.push(stand(root, { x: AURA_STAND.x, z: AURA_STAND.z, rot: facing(AURA_STAND.x, AURA_STAND.z, 0, 4), awning: ['#ff3fd0', '#f4f4f4'], title: 'Auras', titleFill: ['#ffb4f0', '#ff4fc8', '#d61f9e'], npcLook: 'girl' }))
+  addStand('aura', AURA_STAND, { awning: ['#ff3fd0', '#f4f4f4'], title: 'Auras', titleFill: ['#ffb4f0', '#ff4fc8', '#d61f9e'], npcLook: 'girl' })
 
   // South: training mounds on a two-step plinth, feedback board, Vacuums.
-  const H = 28
+  const E = HUB.east
+  const Zs = HUB.halfZ
   const plinth = studMat('#9a8fe0', '#8b7fd6', 2)
-  const px0 = -7.5
-  const pw = H - px0
+  const px0 = 20
+  const pw = E - px0
   // Three terraces climbing toward the south wall; each strip is one row of mounds.
   const tiers = [
-    { d: 11, top: 0.5 },
-    { d: 7.4, top: 1.0 },
-    { d: 3.8, top: 1.5 },
+    { d: 12, top: 0.5 },
+    { d: 8, top: 1.0 },
+    { d: 4, top: 1.5 },
   ]
   for (const t of tiers) {
-    root.add(mesh(worldBox(pw, t.top, t.d), plinth, px0 + pw / 2, t.top / 2, H - t.d / 2))
-    addCollider(px0 + pw / 2, H - t.d / 2, pw, t.d, t.top)
+    root.add(mesh(worldBox(pw, t.top, t.d), plinth, px0 + pw / 2, t.top / 2, Zs - t.d / 2))
+    addCollider(px0 + pw / 2, Zs - t.d / 2, pw, t.d, t.top)
   }
   // Two rows, listed in screen order from the spawn view (screen-left = +x): the front row on the
   // lowest terrace, the back row on the top one, with the middle terrace left open between them.
@@ -809,19 +763,22 @@ export function buildProps(scene) {
     { color: '#a01818', cost: 20, mult: 100, tier: 2 },
     { color: '#ff6a10', cost: 30, mult: 1000, lava: true, tier: 2 },
   ]
+  // Each pile takes the tint of the snow-field zone it trains for (weakest mound = zone 1 .. strongest = zone 10).
+  const byMult = [...mounds].sort((a, b) => a.mult - b.mult)
+  byMult.forEach((m, zi) => { m.pileColor = SNOW.zones.palettes[zi][4] })
   const lavaMats = []
   const piles = []
   const pads = []
-  const floorAt = (wx, wz) => (wx < px0 || wx > H ? 0 : tiers.reduce((top, t) => (wz >= H - t.d ? Math.max(top, t.top) : top), 0))
-  const rowX = (i) => 25 - (i % 5) * 6.2 // five per row, screen-left (+x) first
+  const floorAt = (wx, wz) => (wx < px0 || wx > E ? 0 : tiers.reduce((top, t) => (wz >= Zs - t.d ? Math.max(top, t.top) : top), 0))
+  const rowX = (i) => 56 - (i % 5) * 7.4 // five per row, screen-left (+x) first
   mounds.forEach((m, i) => {
     const ti = m.tier
     const mx = rowX(i) - (ti === 2 ? 1.5 : 0)
-    const mz = H - tiers[ti].d + 1.9
+    const mz = Zs - tiers[ti].d + 2.2
     const pile = mound(root, mx, tiers[ti].top, mz, m, i + 1, floorAt)
     piles.push(pile)
     pads.push({ x: mx, z: mz, top: tiers[ti].top, cost: m.cost, mult: m.mult, pile })
-    if (m.lava) lavaMats.push(pile.leafMat, pile.coreMat)
+    if (m.lava) lavaMats.push(pile.coreMat)
   })
   const zone = textLabel(
     [
@@ -832,15 +789,15 @@ export function buildProps(scene) {
   )
   zone.object.material.opacity = 0.85
   // Clear of the wall's drip planes (at H - 0.05) so the leaves don't cut through the text.
-  zone.object.position.set(17, 7.4, H - 0.4)
+  zone.object.position.set(40, 7.4, Zs - 0.4)
   zone.object.rotation.y = Math.PI
   root.add(zone.object)
 
   // One row along the south wall in front of the mounds, screen-left (+x) to right: Upgrades,
   // feedback board, Vacuums, twin turbine.
-  npcs.push(stand(root, { x: 16, z: 12, rot: Math.PI, awning: ['#2f8cff', '#f4f4f4'], title: 'Upgrades', titleFill: ['#8fe0ff', '#2f9cff', '#1a5ee0'] }))
+  addStand('upgrade', UPGRADE_STAND, { awning: ['#2f8cff', '#f4f4f4'], title: 'Upgrades', titleFill: ['#8fe0ff', '#2f9cff', '#1a5ee0'] })
 
-  const fb = placed(root, 9, 0, 12.5, facing(9, 12.5, 0, 4))
+  const fb = placed(root, 17, 0, 24.5, Math.PI)
   const fbWood = std(C.boardWood)
   for (const s of [-1.35, 1.35]) fb.add(mesh(new BoxGeometry(0.35, 3.2, 0.35), fbWood, s, 1.6, 0))
   fb.add(mesh(new BoxGeometry(3.0, 0.3, 0.35), fbWood, 0, 3.1, 0))
@@ -858,21 +815,9 @@ export function buildProps(scene) {
   )
   fbPanel.object.position.set(0, 1.9, 0.2)
   fb.add(fbPanel.object)
-  addCollider(9, 12.5, 3.1, 0.6, 3.3, facing(9, 12.5, 0, 4))
+  addCollider(17, 24.5, 3.1, 0.6, 3.3, Math.PI)
 
-  npcs.push(stand(root, { x: 2, z: 12, rot: Math.PI, awning: ['#ee2a2a', '#f4f4f4'], title: 'Vacuums', titleFill: ['#ffb05a', '#ff5a1a', '#e2261a'], titleStroke: '#3a0a00' }))
-
-  // Southwest: twin turbine showcase.
-  const vac = vacuumModel()
-  vac.position.set(-16.5, 2.4, 24)
-  vac.scale.setScalar(1.15)
-  root.add(vac)
-  const vacLabel = textLabel(twinBanner(), { height: 1.9 })
-  let twinLevel = state.level
-  vacLabel.object.position.set(-16.5, 4.9, 24)
-  root.add(vacLabel.object)
-  root.add(mesh(new CylinderGeometry(1.2, 1.4, 0.3, 24), std('#6a5fc0'), -16.5, 0.15, 24))
-  addCollider(-16.5, 24, 2.4, 2.4, 0.3)
+  addStand('vacuum', VACUUM_STAND, { awning: ['#2a7ae0', '#f4f4f4'], title: 'Shovels', titleFill: ['#ffffff', '#9fdcff', '#4aa8e8'], titleStroke: '#0a2a4a' })
 
   // West: the field, its luck sign and countdown, and scattered loot.
   const luckSign = textLabel(
@@ -882,42 +827,38 @@ export function buildProps(scene) {
     ],
     { height: 5.5, billboard: false, doubleSided: false },
   )
-  luckSign.object.position.set(-44, 5.5, 0)
+  luckSign.object.position.set(-44, 10, 0)
   luckSign.object.rotation.y = Math.PI / 2
   root.add(luckSign.object)
+  const zoneSigns = [{ zone: 0, object: luckSign.object }]
   // One sign per further zone boundary: its Luck and the best loot tier it tends to drop.
-  const ZONE_COUNT = LEAVES.zones.luck.length
-  for (let zi = 1; zi < LEAVES.zones.luck.length; zi++) {
+  const ZONE_COUNT = SNOW.zones.luck.length
+  for (let zi = 1; zi < SNOW.zones.luck.length; zi++) {
     const tier = zoneTier(zi, ZONE_COUNT)
     const { fill, glow } = RARITY[tier]
     const sign = textLabel(
       [
         { text: tier, px: 120, fill: [glow, fill], stroke: '#1a1a1a' },
-        { text: `x${LEAVES.zones.luck[zi]} Luck`, px: 84, fill: [glow, fill], stroke: '#1a1a1a' },
+        { text: `x${SNOW.zones.luck[zi]} Luck`, px: 84, fill: [glow, fill], stroke: '#1a1a1a' },
       ],
       { height: 5.5, billboard: false, doubleSided: false },
     )
-    sign.object.position.set(LEAVES.zones.edges[zi], 5.5, 0)
+    sign.object.position.set(SNOW.zones.edges[zi], 10, 0)
     sign.object.rotation.y = Math.PI / 2
     root.add(sign.object)
+    zoneSigns.push({ zone: zi, object: sign.object })
   }
   return {
     piles,
     pads,
+    stands,
     update(dt, t) {
+      // Like loot: a zone's Luck sign shows only while the player is in (or just past the border of) that zone.
+      const px = player.position.x
+      for (const s of zoneSigns) s.object.visible = [px, px - 8, px + 8].some((x) => zoneAt(x) === s.zone)
       for (const pile of piles) pile.update(dt)
-      controls.update(dt, t)
-      worldPortal.update()
-      for (const fan of vac.userData.fans) fan.rotation.z += dt * 40
-      vac.userData.fx.update(t)
-      if (state.level !== twinLevel) {
-        twinLevel = state.level
-        vacLabel.setLines(twinBanner())
-      }
-      vac.rotation.y += dt * 0.6
-      // Hover with a fast, tiny engine shudder.
-      vac.position.y = 2.4 + Math.sin(t * 1.5) * 0.15 + Math.sin(t * 60) * 0.012
-      vac.rotation.z = Math.sin(t * 47) * 0.006
+      hall.update(dt)
+      worldPortal.update(dt, t)
       for (const m of lavaMats) m.emissiveIntensity = 0.35 + Math.sin(t * 3) * 0.15
       npcs.forEach((n, i) => {
         const [l, r] = n.userData.arms

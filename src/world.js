@@ -32,7 +32,7 @@ function mulberry32(seed) {
 const TILE_PX = 512
 const TILE_M = 8 // metres of ground covered by one texture tile
 
-// Paints a tileable grass tile: mottled base, soft blotches, then blade strokes.
+// Paints a tileable snow tile: white base, soft blue shadows, then sparkle flecks.
 // Returns the colour canvas and a greyscale height canvas (for the bump map).
 function paintGrass() {
   const rand = mulberry32(1337)
@@ -57,7 +57,7 @@ function paintGrass() {
     }
   }
 
-  // Large soft blotches of lighter/darker green.
+  // Large soft blotches of pale-blue shadow / bright white.
   for (let i = 0; i < 90; i++) {
     const x = rand() * TILE_PX
     const y = rand() * TILE_PX
@@ -65,15 +65,15 @@ function paintGrass() {
     const dark = rand() < 0.5
     wrapped(x, y, r, (px, py) => {
       const g = c.createRadialGradient(px, py, 0, px, py, r)
-      g.addColorStop(0, dark ? 'rgba(40,90,30,0.28)' : 'rgba(150,200,90,0.2)')
+      g.addColorStop(0, dark ? 'rgba(120,160,205,0.22)' : 'rgba(255,255,255,0.35)')
       g.addColorStop(1, 'rgba(0,0,0,0)')
       c.fillStyle = g
       c.fillRect(px - r, py - r, r * 2, r * 2)
     })
   }
 
-  // Blades: short strokes in a range of greens, mirrored into the height map.
-  const greens = [COLORS.grassDark, COLORS.grass, '#74b552', '#3f7a2e', '#8cc760']
+  // Flecks: short strokes in whites and ice blues, mirrored into the height map.
+  const greens = [COLORS.grassDark, COLORS.grass, '#ffffff', '#dbe9f6', '#c3d8ec']
   for (let i = 0; i < 9000; i++) {
     const x = rand() * TILE_PX
     const y = rand() * TILE_PX
@@ -115,7 +115,7 @@ export function createGround() {
     new MeshStandardMaterial({
       map: makeTexture(color, true),
       bumpMap: makeTexture(height, false),
-      bumpScale: 1.2,
+      bumpScale: 0.5,
       ...MATERIAL_PBR.GROUND,
     }),
   )

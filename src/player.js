@@ -82,6 +82,8 @@ export function step(dt) {
   player.grounded = false
 
   const p = player.position
+  const prevX = p.x
+  const prevZ = p.z
   player.velocity.y += PHYSICS.gravity * dt
   p.x += player.velocity.x * dt
   p.y += player.velocity.y * dt
@@ -92,6 +94,11 @@ export function step(dt) {
   p.z = Math.max(WORLD_BOUNDS.minZ + r, Math.min(WORLD_BOUNDS.maxZ - r, p.z))
 
   pushOut(p, r, player.dims.height)
+
+  // Walls (uncleared snow blocks, props, bounds) cancel the velocity they stop, so the
+  // run animation / camera rush don't play while pressing into something solid.
+  player.velocity.x = (p.x - prevX) / dt
+  player.velocity.z = (p.z - prevZ) / dt
 
   const groundY = floorAt(p.x, p.z, p.y)
   if (p.y <= groundY) {

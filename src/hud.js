@@ -3,19 +3,18 @@
 // Plain DOM over the canvas. Menu tiles open a placeholder panel; purchase
 // buttons show a toast (no store yet).
 import './hud.css'
-import { DEV_MODE, DISABLE_TUTORIALS, INDEX, BUY_WITH_BLOXBUX, LEAVES, LEVEL_UP_POPUP, FREE_GIFT, DAILY, UPGRADES, VACUUMS, AURAS, VACUUM_RARITY } from './config.js'
+import { DEV_MODE, DISABLE_TUTORIALS, INDEX, BUY_WITH_BLOXBUX, SNOW, LEVEL_UP_POPUP, DAILY, UPGRADES, VACUUMS, AURAS, VACUUM_RARITY } from './config.js'
 import { player, respawn } from './player.js'
 import { ICONS, auraIcon, vacuumIcon } from './icons.js'
-import { mmss } from './timers.js'
 import { ITEM_CATALOG, ITEM_INFO, RARITY, RARITY_ROW_BG } from './data/loot.js'
 import { closeIndex, indexProgress, openIndex } from './index.js'
 import { createIndexViews } from './indexView.js'
 import { playerScreen } from './screenPos.js'
-import { addPlaySeconds, state, subscribe, notify, setToast, onPowerGain, totalPower, cashMultiplier, powerGainMultiplier, boostActive, boostLeft } from './state.js'
+import { state, subscribe, notify, setToast, onPowerGain, totalPower, cashMultiplier, powerGainMultiplier, boostActive, boostLeft } from './state.js'
 import { closeRebirth, openRebirth, rebirthLevel, rebirthProgress, tryRebirth } from './rebirth.js'
 import { bagValue, closeSell, groupBag, isLocked, payout, sellAll, sellItem, toggleLock, unlockedBag } from './sell.js'
 import { buyUpgrade, closeUpgrades, upgradeCost } from './upgrades.js'
-import { claimGift, closeVacuums, pickVacuum } from './vacuums.js'
+import { closeVacuums, pickVacuum } from './vacuums.js'
 import { createVacuumViews } from './vacuumView.js'
 import { settings, setSettings, subscribeSettings, sfx } from './settings.js'
 import { closeAuras, pickAura } from './auras.js'
@@ -55,6 +54,9 @@ const hms = (sec) => {
   return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
 }
 
+// Snowflake glyph (no background) used for the level badge and the "+N Power" pops.
+const SNOWFLAKE_SVG = `<svg viewBox="0 0 64 64" width="100%" height="100%" style="display:block"><g stroke-linecap="round" stroke-linejoin="round" fill="none"><g stroke="#0a2a40" stroke-width="9"><path d="M32 6v52M9.5 19l45 26M9.5 45l45-26"/></g><g stroke="#0a2a40" stroke-width="7"><path d="M25 11l7 7 7-7M25 53l7-7 7 7M10 28l10 3-3 10M54 36l-10-3 3-10M10 36l10-3-3-10M54 28l-10 3 3 10"/></g><g stroke="#bfeaff" stroke-width="4.5"><path d="M32 6v52M9.5 19l45 26M9.5 45l45-26"/></g><g stroke="#e8f8ff" stroke-width="3"><path d="M25 11l7 7 7-7M25 53l7-7 7 7M10 28l10 3-3 10M54 36l-10-3 3-10M10 36l10-3-3-10M54 28l-10 3 3 10"/></g></g></svg>`
+
 // Daily Login tile text, e.g. "76 Power + 2x Cash 30m" or "$58.6K".
 function dailyLabel(r) {
   const kind = { power: 'Power', cash: 'Cash' }
@@ -74,20 +76,13 @@ function template() {
     <div class="trail">
       <i class="trail-flag">🏁</i>
       <div class="trail-bar">
-        ${[...LEAVES.zones.palettes]
+        ${[...SNOW.zones.palettes]
           .map((p, i) => `<div class="trail-seg" style="--c:${p[0]}"><span class="o-thin">${i + 1}</span></div>`)
           .reverse()
           .join('')}
         <div class="trail-me" data-bind="trailMe"></div>
       </div>
     </div>
-    <button class="gift pressable" data-act="gift">
-      <div class="t o" data-bind="gift"></div>
-      <div class="gun"><canvas></canvas></div>
-      <div class="gname o-thin">${VACUUMS.find((v) => v.id === FREE_GIFT.vacuum).name}</div>
-      <div class="gpow o">${short(VACUUMS.find((v) => v.id === FREE_GIFT.vacuum).power)} Power</div>
-      <div class="gprice o"><s>$${short(VACUUMS.find((v) => v.id === FREE_GIFT.vacuum).cost)}</s><b>FREE</b></div>
-    </button>
     <div class="menu">
       <button class="tile pressable" data-act="openIndex">${icon('book')}<span class="o">Index</span></button>
       <button class="tile pressable" data-panel="Config">${icon('gear')}<span class="o">Config</span></button>
@@ -109,7 +104,7 @@ function template() {
     <button class="home-btn pressable" data-act="home"><span class="o">HOME</span></button>
     <div class="center">
       <div style="position:relative">
-        <div class="level-icon"><img src="${import.meta.env.BASE_URL}UI/swirl.png" alt="" draggable="false" style="display:block;width:100%;height:100%;object-fit:contain"></div>
+        <div class="level-icon">${SNOWFLAKE_SVG}</div>
         <div class="level">
           <div class="fill" data-bind="xpFill"></div>
           <div class="lv o" data-bind="level"></div>
@@ -143,7 +138,7 @@ function template() {
       </div>
       <div class="help-col" data-task="blow">
         <div class="chk" aria-hidden="true">&#10003;</div>
-        <h3 class="o">Blow Leaves</h3>
+        <h3 class="o">Dig Snow</h3>
         <div class="keys"><kbd data-code="KeyF">F</kbd><span class="or o-thin">or</span><kbd class="wide" data-code="Click">CLICK</kbd></div>
         <div class="cap o-thin">Try it</div>
       </div>
@@ -214,7 +209,7 @@ function template() {
     <div class="upg vac">
       <div class="upg-head">
         <i class="vac-flame">${ICONS.vacFlame}</i>
-        <h2 class="o">Vacuums</h2>
+        <h2 class="o">Shovels</h2>
         <button class="upg-x pressable" data-act="closeVacuums"><svg viewBox="0 0 40 40"><path d="M11 11 L29 29 M29 11 L11 29" stroke="#121212" stroke-width="10" stroke-linecap="round"/><path d="M11 11 L29 29 M29 11 L11 29" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg></button>
       </div>
       <div class="upg-body">
@@ -549,7 +544,6 @@ export function createHud({ showMenu }) {
     else if (el.dataset.vfx) setSettings({ vfx: el.dataset.vfx === 'on' })
     else if (el.dataset.act === 'portal') showMenu()
     else if (el.dataset.act === 'home') respawn()
-    else if (el.dataset.act === 'gift') claimGift()
     else if (el.dataset.act === 'chat') say('Chat coming soon!')
   })
   // Keep clicks on the HUD from reaching the game's pointer handlers.
@@ -671,14 +665,14 @@ export function createHud({ showMenu }) {
   const idxViews = createIndexViews(
     idxTiles.map((t) => ({ name: t.name, canvas: t.canvas })),
     idxPanel.querySelector('.idx-grid'),
-    (name) => s.discovered.includes(name),
+    (name) => DEV_MODE || s.discovered.includes(name),
   )
   function renderIndex() {
     idxPanel.classList.toggle('open', s.indexOpen)
     idxViews.setActive(s.indexOpen)
     if (!s.indexOpen) return
     for (const t of idxTiles) {
-      const found = s.discovered.includes(t.name)
+      const found = DEV_MODE || s.discovered.includes(t.name) // dev mode reveals every item
       t.el.classList.toggle('found', found)
       t.label.textContent = found ? t.name : '???'
       t.val.textContent = found ? `$${short(ITEM_INFO[t.name].value)}` : '???'
@@ -825,22 +819,7 @@ export function createHud({ showMenu }) {
     bind.cash.textContent = `$${short(s.cash)}`
     bind.rebirth.textContent = `${Math.floor(rebirthProgress() * 100)}%`
   }
-  const giftBtn = root.querySelector('.gift')
-  const giftViews = createVacuumViews(
-    [{ id: FREE_GIFT.vacuum, rarity: VACUUMS.find((v) => v.id === FREE_GIFT.vacuum).rarity, canvas: giftBtn.querySelector('canvas') }],
-    null,
-  )
-  giftViews.setActive(true)
-  let lastTick = performance.now()
   function tick() {
-    const now = performance.now()
-    const dt = (now - lastTick) / 1000
-    lastTick = now
-    if (document.visibilityState === 'visible' && dt < 2 && !state.giftClaimed) addPlaySeconds(dt)
-    giftBtn.hidden = state.giftClaimed
-    const left = FREE_GIFT.playSeconds - state.playSeconds
-    bind.gift.textContent = left > 0 ? `FREE IN ${mmss(left)}` : 'CLAIM!'
-    giftBtn.classList.toggle('ready', left <= 0)
     tickBoosts()
     if (s.dailyOpen || dailyWas !== dailyStatus().claimable) renderDaily()
     dailyWas = dailyStatus().claimable
@@ -881,7 +860,7 @@ export function createHud({ showMenu }) {
     el.className = 'chop-pop'
     el.style.left = `${playerScreen.x * 100 + (Math.random() - 0.5) * 16}%`
     el.style.top = `${playerScreen.y * 100 - 4 + (Math.random() - 0.5) * 16}%`
-    el.innerHTML = `<span class="chop-pop-row"><img class="chop-pop-ico" src="${import.meta.env.BASE_URL}UI/swirl.png" alt="" draggable="false"><span class="o">+${short(n)}</span></span>`
+    el.innerHTML = `<span class="chop-pop-row"><span class="chop-pop-ico">${SNOWFLAKE_SVG}</span><span class="o">+${short(n)}</span></span>`
     pops.appendChild(el)
     if (pops.childElementCount > 12) pops.firstChild.remove()
     el.addEventListener('animationend', () => el.remove())
@@ -903,14 +882,14 @@ export function createHud({ showMenu }) {
   syncWindowOpen()
   tick()
   setInterval(tick, 250)
-  // Corridor progress: hub edge (bottom) -> end of the field (top).
-  const trailSpan = LEAVES.minX - LEAVES.maxX
+  // Snowfields progress: hub edge (bottom) -> end of the field (top).
+  const trailSpan = SNOW.minX - SNOW.maxX
   let wasInField = false
   const trailLoop = () => {
-    const t = Math.min(1, Math.max(0, (LEAVES.minX - player.position.x) / trailSpan))
+    const t = Math.min(1, Math.max(0, (SNOW.minX - player.position.x) / trailSpan))
     bind.trailMe.style.bottom = `calc(${t * 100}% - 20px)`
-    // In the leaf corridor the menu tiles and level bar give way to a Home button.
-    const inField = player.position.x < LEAVES.minX
+    // In the Snowfields the menu tiles and level bar give way to a Home button.
+    const inField = player.position.x < SNOW.minX
     if (inField !== wasInField) root.classList.toggle('in-field', (wasInField = inField))
     requestAnimationFrame(trailLoop)
   }
