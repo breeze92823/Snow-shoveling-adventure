@@ -5,7 +5,7 @@
 // until that answer is in). The step machine itself is tutorialLogic.js.
 import { ExtrudeGeometry, Group, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, Shape } from 'three'
 import './tutorial.css'
-import { DISABLE_TUTORIALS, LEAVES, SELL_STAND, TUTORIAL, VACUUM_STAND, VACUUMS } from './config.js'
+import { DISABLE_TUTORIALS, SNOW, SELL_STAND, TUTORIAL, VACUUM_STAND, VACUUMS } from './config.js'
 import { player, floorAt } from './player.js'
 import { notify, shortMoney, state, totalPower } from './state.js'
 import { padWithMult } from './trainPads.js'
@@ -14,7 +14,7 @@ import { nextStep } from './tutorialLogic.js'
 import { isTouch } from './device.js'
 
 const VACUUM = VACUUMS.find((v) => v.id === TUTORIAL.vacuum)
-const ZONE1 = { x: (LEAVES.zones.edges[0] + LEAVES.zones.edges[1]) / 2, z: 0 }
+const ZONE1 = { x: (SNOW.zones.edges[0] + SNOW.zones.edges[1]) / 2, z: 0 }
 
 const SPACING = 1.1 // m between trail arrows
 const SPEED = 1.8 // m/s the trail crawls toward the target
@@ -212,14 +212,14 @@ export function createTutorial(scene, loot) {
 
     const need = Math.max(0, VACUUM.cost - state.cash)
     const [title, hint] = [
-      [`Hold ${isTouch ? 'BLOW' : 'CLICK'} to gain Power (${Math.floor(Math.min(totalPower(), TUTORIAL.clickPower))}/${TUTORIAL.clickPower})`, ''],
+      [`Hold ${isTouch ? 'DIG' : 'CLICK'} to gain Power (${Math.floor(Math.min(totalPower(), TUTORIAL.clickPower))}/${TUTORIAL.clickPower})`, ''],
       [`Stand on the x${TUTORIAL.pad} Power Training Pile (${Math.floor(Math.min(totalPower(), TUTORIAL.power))}/${TUTORIAL.power})`, 'It trains you automatically while you stand on it'],
-      [`${isTouch ? 'Hold BLOW to clear' : 'Click and blow away'} the leaves in Zone 1!`, 'Follow the arrow to the high-value loot'],
+      [`${isTouch ? 'Hold DIG to clear' : 'Click and dig out'} the snow in Zone 1!`, 'Follow the arrow to the high-value loot'],
       [`Collect loot worth $${shortMoney(need)}!`, `${isTouch ? 'Tap the E button' : 'Press E'} to pick it up (bag $${shortMoney(worth)}/$${shortMoney(need)})`],
       ['Sell your loot!', `Walk to the Sell Loot stall and ${isTouch ? 'tap E' : 'press E'}`],
       ['Press Sell All!', ''],
       ['Close the window', ''],
-      ['Buy a better Vacuum!', `Walk to the Vacuums stall and ${isTouch ? 'tap E' : 'press E'}`],
+      ['Buy a better Shovel!', `Walk to the Shovels stall and ${isTouch ? 'tap E' : 'press E'}`],
       [`Buy the ${VACUUM.name}!`, ''],
     ][step]
     paintBanner(`${step}|${title}|${hint}`, title, hint)

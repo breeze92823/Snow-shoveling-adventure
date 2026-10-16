@@ -3,7 +3,7 @@
 // the leaderboards. Never throws and never blocks play: with no server (or an unreachable one)
 // the game simply runs offline on local state.
 import { Client } from '@colyseus/sdk'
-import { DEV_MODE, GAME_SLUG, NET, SERVER_URL, TUTORIAL } from './config.js'
+import { DEV_MODE, DEV_USER_ID, GAME_SLUG, NET, SERVER_URL, TUTORIAL } from './config.js'
 import { authState, sdk, getEquippedAvatar, getProportions, getSkinTextureUrl, subscribeAuth } from './bloxity.js'
 import { notify, setServerTime, state, subscribe } from './state.js'
 import { applyUpgrades } from './upgrades.js'
@@ -48,6 +48,7 @@ function guestId() {
 const GUEST = guestId()
 
 function identity() {
+  if (DEV_USER_ID && !authState.user) return { userId: DEV_USER_ID, username: DEV_USER_ID }
   const u = authState.user
   const id = u && (u._id || u.id || u.userId || u.uid)
   if (!id) return { userId: GUEST, username: authState.guest?.displayName || authState.guest?.username || 'Guest' }

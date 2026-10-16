@@ -1,13 +1,14 @@
 import { Clock, PCFSoftShadowMap, PerspectiveCamera, Scene, SRGBColorSpace, Vector3, WebGLRenderer, Group, PointLight } from 'three'
-import { CAMERA, LEAVES, SPAWN, SPAWN_FACING } from './config.js'
+import { CAMERA, SNOW, SPAWN, SPAWN_FACING } from './config.js'
 import * as bloxity from './bloxity.js'
 import { inputState, install as installInput } from './input.js'
 import { player, resetPlayer, step as stepPlayer } from './player.js'
-import { setFovExtra, syncYawToPlayer, update as updateCamera } from './camera.js'
-import { createLeaves } from './leaves.js'
+import { syncYawToPlayer, update as updateCamera } from './camera.js'
+import { createDigField } from './dig.js'
+import { createDigSound } from './digSound.js'
 import { createLoot } from './loot.js'
-import { createFallingLeaves } from './fallingLeaves.js'
-import { state, notify, trainPower, resetTrainTimer } from './state.js'
+import { createSnowfall } from './snowfall.js'
+import { state, notify, trainPower, resetTrainTimer, blowerPower } from './state.js'
 import { blowPad, noticePad, padAt, padUnlocked, setPads } from './trainPads.js'
 import { resolveInteract } from './interact.js'
 import { updateSell } from './sell.js'
@@ -22,7 +23,7 @@ import { playerScreen } from './screenPos.js'
 import { createHud } from './hud.js'
 import { buildDefaultCharacter, loadBaseCharacter } from './avatar/character.js'
 import { applyProportions, attachEquippedAccessories } from './avatar/loader.js'
-import { attachBlower, setHeldVacuum, animateHeldVacuum } from './avatar/blower.js'
+import { attachHeldShovel } from './avatar/heldShovel.js'
 import { disposeAnimator, makeAnimator } from './avatar/animator.js'
 import { initNet, sendPose, syncAvatar } from './net.js'
 import { createRemotePlayers } from './remotePlayers.js'
@@ -78,26 +79,27 @@ const lights = createLights()
 scene.add(lights.hemi, lights.sun, lights.sun.target)
 buildHub(scene)
 const props = buildProps(scene)
-const leaves = createLeaves(scene, renderer, preset.leaves)
-// Training mounds only react to the blower's airflow once unlocked (even from a distance).
+const field = createDigField(scene, preset.leaves)
+const digSound = createDigSound()
+// Training mounds only react to the shovel once unlocked (even from a distance).
 const padOf = new Map(props.pads.map((p) => [p.pile, p]))
 for (const pile of props.piles) {
   const pad = padOf.get(pile)
   if (!pad) {
-    leaves.addTarget(pile.target)
+    field.addTarget(pile.target)
     continue
   }
   const gated = Object.create(pile.target)
   gated.locked = () => !padUnlocked(pad)
   gated.blow = (...args) => pile.target.blow(...args)
-  leaves.addTarget(gated)
+  field.addTarget(gated)
 }
 setPads(props.pads)
-const fallingLeaves = createFallingLeaves(scene, preset.leaves)
-const loot = createLoot(scene, leaves.piles)
-leaves.onPileCleared(loot.spawnFor)
-leaves.onPileCleared(() => {
-  state.leaves += LEAVES.piles.leavesPerPile
+const fallingLeaves = createSnowfall(scene, preset.leaves)
+const loot = createLoot(scene, field.piles)
+field.onPileCleared(loot.spawnFor)
+field.onPileCleared(() => {
+  state.leaves += SNOW.piles.leavesPerPile
   notify()
 })
 createHud({ showMenu: bloxity.showMenu })
@@ -135,7 +137,7 @@ function syncAura() {
 }
 
 let avatar = null
-let blower = null
+let shovel = null
 let animator = null
 let generation = 0
 let hubTime = 0 // s spent back in the hub since the field was last blown
@@ -144,8 +146,8 @@ function setAvatar(next) {
   if (avatar) playerGroup.remove(avatar)
   disposeAnimator(animator)
   avatar = next
-  blower = attachBlower(avatar)
-  setHeldVacuum(blower, state.vacuum)
+  shovel?.dispose()
+  shovel = attachHeldShovel(avatar, () => state.vacuum)
   playerGroup.add(avatar)
   animator = makeAnimator(avatar)
 }
@@ -198,11 +200,8 @@ bloxity.onSetting((key, value) => {
 
 // --- Loop -------------------------------------------------------------------
 const clock = new Clock()
-const fwd = new Vector3()
-const nozzle = new Vector3()
 const chest = new Vector3()
 const HUB_X = -30 // x of the plaza's west wall line; further east counts as the hub
-const NOZZLE_LOCAL = new Vector3(0, 0.7, 2.25) // tube mouth in blower space (see avatar/blower.js)
 
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1) // clamp huge frames (tab switch, breakpoint)
@@ -224,25 +223,24 @@ renderer.setAnimationLoop(() => {
     speed: Math.hypot(player.velocity.x, player.velocity.z),
     verticalVelocity: player.velocity.y,
     turn: inputState.move.x,
-    blowing,
+    digging: blowing,
+    strength: blowerPower(),
   })
+  shovel?.update(dt, animator)
+  if (animator?.dig.impact) {
+    animator.dig.impact = false
+    digSound.hit()
+    if (field.spot) field.puff(field.spot.x, field.spot.z)
+  }
+  if (animator?.dig.thrown) {
+    animator.dig.thrown = false
+    digSound.throw()
+  }
   sendPose(player, Math.hypot(player.velocity.x, player.velocity.z), blowing ? 'blow' : '')
   remotes.update(dt, clock.elapsedTime, player.position)
-  setHeldVacuum(blower, state.vacuum) // no-op unless a different vacuum was equipped
-  animateHeldVacuum(blower, clock.elapsedTime)
   syncAura()
   auraFx?.update(clock.elapsedTime, dt)
-  playerGroup.updateMatrixWorld(true) // so the nozzle below follows this frame's pose
-
-  // Airflow leaves the blower's mouth (falls back to chest height if the rig has none).
-  fwd.set(0, 0, 1).applyQuaternion(playerGroup.quaternion)
-  const chestY = player.position.y + 1.1
-  if (blower) nozzle.copy(NOZZLE_LOCAL).applyMatrix4(blower.matrixWorld)
-  if (!blower || !Number.isFinite(nozzle.x) || nozzle.distanceTo(playerGroup.position) > 3.5) {
-    nozzle.set(player.position.x + fwd.x * 1, chestY, player.position.z + fwd.z * 1)
-  }
-  leaves.update(dt, clock.elapsedTime, nozzle, fwd, blowing, renderer.domElement.height)
-  setFovExtra(leaves.power * LEAVES.blower.fovPunch)
+  field.update(dt, blowing, player)
   if (padTraining) {
     blowPad(pad, dt)
     trainPower(dt, pad.mult)
@@ -250,10 +248,10 @@ renderer.setAnimationLoop(() => {
   else resetTrainTimer()
 
   // Back in the hub for a moment: the field regrows and loot left lying in it is lost.
-  if (player.position.x > HUB_X && leaves.dirty) {
+  if (player.position.x > HUB_X && field.dirty) {
     hubTime += dt
-    if (hubTime > LEAVES.piles.regrowDelay) {
-      leaves.reset()
+    if (hubTime > SNOW.piles.regrowDelay) {
+      field.reset()
       loot.reset()
       hubTime = 0
     }
@@ -281,5 +279,5 @@ window.addEventListener('beforeunload', bloxity.teardown)
 
 // Dev-only console hook, e.g. __game.teleport(10, 0, -5)
 if (import.meta.env.DEV) {
-  window.__game = { player, state, leaves, loot, teleport: (x, y, z, facing = player.facing) => { resetPlayer({ x, y, z }, facing); syncYawToPlayer() } }
+  window.__game = { player, state, field, loot, teleport: (x, y, z, facing = player.facing) => { resetPlayer({ x, y, z }, facing); syncYawToPlayer() } }
 }

@@ -85,7 +85,7 @@ export const ICONS = {
     <text x="32" y="51" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="700" font-size="24" fill="#2a2a3a">31</text>`,
   ),
   smiley: svg('0 0 40 40', '<circle cx="20" cy="20" r="16" fill="#ffd21a" stroke="#7a5a00" stroke-width="2.5"/><circle cx="14" cy="16" r="2.4" fill="#3a2a00"/><circle cx="26" cy="16" r="2.4" fill="#3a2a00"/><path d="M12 23 Q20 31 28 23" fill="none" stroke="#3a2a00" stroke-width="2.6" stroke-linecap="round"/>'),
-  leaf: svg('0 0 40 40', '<path d="M6 34 C6 16 18 6 36 4 C36 22 26 34 8 34 Z" fill="#3ad24a" stroke="#0a4a0a" stroke-width="2.5"/><path d="M8 33 L26 15" stroke="#0a4a0a" stroke-width="2.5" stroke-linecap="round"/>'),
+  leaf: svg('0 0 40 40', '<g fill="none" stroke="#0a3a66" stroke-width="5.5" stroke-linecap="round"><path d="M20 6 V34 M20 12 L14 7 M20 12 L26 7 M20 28 L14 33 M20 28 L26 33" transform="rotate(0 20 20)"/><path d="M20 6 V34 M20 12 L14 7 M20 12 L26 7 M20 28 L14 33 M20 28 L26 33" transform="rotate(60 20 20)"/><path d="M20 6 V34 M20 12 L14 7 M20 12 L26 7 M20 28 L14 33 M20 28 L26 33" transform="rotate(120 20 20)"/></g><g fill="none" stroke="#bfe8ff" stroke-width="2.5" stroke-linecap="round"><path d="M20 6 V34 M20 12 L14 7 M20 12 L26 7 M20 28 L14 33 M20 28 L26 33" transform="rotate(0 20 20)"/><path d="M20 6 V34 M20 12 L14 7 M20 12 L26 7 M20 28 L14 33 M20 28 L26 33" transform="rotate(60 20 20)"/><path d="M20 6 V34 M20 12 L14 7 M20 12 L26 7 M20 28 L14 33 M20 28 L26 33" transform="rotate(120 20 20)"/></g>'),
   backpack: svg('0 0 40 40', '<path d="M14 9 a6 6 0 0 1 12 0" fill="none" stroke="#5a0a0a" stroke-width="3"/><rect x="7" y="9" width="26" height="27" rx="8" fill="#e8483a" stroke="#5a0a0a" stroke-width="2.5"/><rect x="12" y="22" width="16" height="10" rx="3" fill="#c8302a" stroke="#5a0a0a" stroke-width="2"/>'),
   orb: svg('0 0 40 40', '<circle cx="20" cy="20" r="15" fill="#fff" stroke="#1a1a2a" stroke-width="2.5"/><path d="M5 20 a15 15 0 0 1 30 0 Z" fill="#e8283a" stroke="#1a1a2a" stroke-width="2.5"/><circle cx="20" cy="20" r="4.5" fill="#fff" stroke="#1a1a2a" stroke-width="2.5"/>'),
   cash: svg(
@@ -152,7 +152,7 @@ export const ICONS = {
   clover: svg('0 0 20 20', '<g fill="currentColor"><circle cx="10" cy="5.5" r="4"/><circle cx="14.5" cy="10" r="4"/><circle cx="10" cy="14.5" r="4"/><circle cx="5.5" cy="10" r="4"/></g>'),
 }
 
-// A white-tile blower picture for the Vacuums window: [body, accent] colours.
+// A white-tile blower picture for the Shovels window: [body, accent] colours.
 export const vacuumIcon = ([body, accent]) =>
   svg(
     '0 0 96 96',

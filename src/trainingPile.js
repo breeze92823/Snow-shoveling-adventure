@@ -1,15 +1,13 @@
-// A training-zone leaf pile: a lumpy dome covered in leaves. It never changes. While the blower is
-// aimed at it, a few leaves lift off, fly downwind and shrink away. leaves.js feeds it airflow
-// through `target.blow`; props.js calls `update` each frame.
+// A training-zone snow pile: a lumpy dome covered in snow clumps. It never changes. While the player
+// digs at it (or stands on its pad), a few clumps lift off, fly and shrink away. dig.js / trainPads.js
+// drive it through `target.blow`; props.js calls `update` each frame.
 import {
   BufferAttribute, BufferGeometry, Color, DoubleSide, Group, InstancedMesh, Matrix4, Mesh,
   MeshStandardMaterial, PlaneGeometry, Quaternion, Vector3,
 } from 'three'
 import { addPusher } from './colliders.js'
-import { LEAVES } from './config.js'
-import { leafTexture } from './leaves.js'
+import { snowTexture } from './snowTex.js'
 
-const Z = LEAVES.zones
 const LIFE = 1.0 // s a blown leaf lives
 const POOL = 90 // blown leaves alive at once
 const R = 1.55 // pile radius, m
@@ -21,7 +19,7 @@ let sharedTex = null
 const frac = (x) => x - Math.floor(x)
 
 export function createTrainingPile({ x, y, z, color, lava = false, seed = 1, floorAt = () => y, hp = 1 }) {
-  sharedTex ??= leafTexture()
+  sharedTex ??= snowTexture()
   const group = new Group()
   const rnd = (() => {
     let s = Math.floor(seed * 9301 + 49297) % 233280 || 1
@@ -134,7 +132,7 @@ export function createTrainingPile({ x, y, z, color, lava = false, seed = 1, flo
     radius: R,
     // w: airflow strength 0..1 at the pile; (wx, wz): its heading; bp: blower power.
     blow(w, wx, wz, dt, bp) {
-      if (w <= Z.wearMin) return
+      if (w <= 0) return
       const hl = Math.hypot(wx, wz)
       if (hl > 1e-3) wind = [wx / hl, wz / hl]
       owed += (60 + 80 * w) * dt

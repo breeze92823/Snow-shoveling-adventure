@@ -1,24 +1,27 @@
 import { CanvasTexture, Color, DoubleSide, InstancedMesh, MathUtils, MeshBasicMaterial, Object3D, PlaneGeometry, SRGBColorSpace } from 'three'
-import { FALLING_LEAVES, HUB } from './config.js'
+import { SNOWFALL, HUB } from './config.js'
 
-// Autumn leaves drifting down from the sky around the player while in/near the leaf corridor.
+// Snowflakes drifting down from the sky around the player, everywhere.
 
-function leafTexture() {
+function snowTexture() {
   const c = document.createElement('canvas')
   c.width = c.height = 64
   const g = c.getContext('2d')
-  g.fillStyle = '#fff'
-  g.beginPath()
-  g.moveTo(32, 4)
-  g.bezierCurveTo(60, 18, 58, 48, 32, 60)
-  g.bezierCurveTo(6, 48, 4, 18, 32, 4)
-  g.fill()
-  g.strokeStyle = 'rgba(120,70,20,0.55)'
-  g.lineWidth = 2
-  g.beginPath()
-  g.moveTo(32, 8)
-  g.lineTo(32, 62)
-  g.stroke()
+  g.translate(32, 32)
+  g.strokeStyle = '#fff'
+  g.lineCap = 'round'
+  g.lineWidth = 4
+  for (let k = 0; k < 6; k++) {
+    g.rotate(Math.PI / 3)
+    g.beginPath()
+    g.moveTo(0, 0)
+    g.lineTo(0, -26)
+    g.moveTo(0, -15)
+    g.lineTo(7, -22)
+    g.moveTo(0, -15)
+    g.lineTo(-7, -22)
+    g.stroke()
+  }
   const t = new CanvasTexture(c)
   t.colorSpace = SRGBColorSpace
   return t
@@ -26,10 +29,10 @@ function leafTexture() {
 
 import { settings } from './settings.js'
 
-export function createFallingLeaves(scene, quality = 1) {
-  const F = FALLING_LEAVES
+export function createSnowfall(scene, quality = 1) {
+  const F = SNOWFALL
   const max = Math.max(20, Math.round(F.count * quality))
-  const mat = new MeshBasicMaterial({ map: leafTexture(), alphaTest: 0.5, side: DoubleSide, fog: true })
+  const mat = new MeshBasicMaterial({ map: snowTexture(), alphaTest: 0.5, side: DoubleSide, fog: true })
   const mesh = new InstancedMesh(new PlaneGeometry(F.size, F.size), mat, max)
   mesh.frustumCulled = false
   mesh.count = 0
@@ -54,8 +57,7 @@ export function createFallingLeaves(scene, quality = 1) {
 
   return {
     update(dt, time, playerPos) {
-      // 0 in the hub, 1 once well inside the corridor
-      const k = 1 - MathUtils.smoothstep(playerPos.x, F.fullX, F.startX)
+      const k = 1
       const n = settings.vfx ? Math.round(max * k) : 0
       mesh.visible = n > 0
       if (n <= 0) return

@@ -30,7 +30,7 @@ import {
   SRGBColorSpace,
 } from 'three'
 import { addCollider } from './colliders.js'
-import { HUB_COLORS as C, LEAVES, VACUUMS, SELL_STAND, AURA_STAND, WORLD_PORTAL } from './config.js'
+import { HUB_COLORS as C, SNOW, VACUUMS, SELL_STAND, AURA_STAND, WORLD_PORTAL } from './config.js'
 import { player } from './player.js'
 import { RARITY, zoneTier } from './data/loot.js'
 import { drawText, loadIcon, panel, textLabel } from './labels.js'
@@ -206,7 +206,7 @@ function leaderboard(parent, x, z, rot, key, title, titleFill, valueHeader, valu
 const CONTROL_ROWS = [
   ['Move', ['W', 'A', 'S', 'D']],
   ['Jump', ['SPACE']],
-  ['Blow Leaves', ['F', 'or', 'CLICK']],
+  ['Dig Snow', ['F', 'or', 'CLICK']],
   ['Look', ['MOUSE']],
   ['Zoom', ['WHEEL']],
   ['Interact', ['E']],
@@ -353,7 +353,7 @@ const twinPriceLine = () =>
     ? { text: `Unlocks at Level ${TWIN.unlockLevel}`, px: 60, fill: ['#ffb0b0', '#ff4a4a'], stroke: '#3a0000' }
     : { text: `$${shortMoney(TWIN.cost)}`, px: 60, fill: ['#fff27a', '#ffb81a'], stroke: '#3a2a00' }
 const twinBanner = () => [
-  { text: 'Twin Turbine Vacuum', px: 64, fill: ['#ff9cf0', '#e43cc8'] },
+  { text: 'Rune Shovel', px: 64, fill: ['#ff9cf0', '#e43cc8'] },
   { text: 'Always 400% Better!', px: 56, fill: ['#9cff7a', '#3ad21a'] },
   twinPriceLine(),
 ]
@@ -514,7 +514,7 @@ function streakTexture() {
   t.colorSpace = SRGBColorSpace
   return t
 }
-function leafTexture() {
+function snowTexture() {
   const c = document.createElement('canvas')
   c.width = c.height = 32
   const x = c.getContext('2d')
@@ -628,20 +628,20 @@ function turbineFx(g) {
   const IN = 110
   const OUT = 130
   const DUST = 48
-  const LEAVES = 36
+  const FLAKES = 36
   const motes = mk(IN, 0.2)
   const sparks = mk(OUT, 0.24)
   const dust = mk(DUST, 0.7, { opacity: 0.35 })
   const leavesGeo = new BufferGeometry()
-  leavesGeo.setAttribute('position', new BufferAttribute(new Float32Array(LEAVES * 3), 3))
-  leavesGeo.setAttribute('color', new BufferAttribute(new Float32Array(LEAVES * 3), 3))
-  const leaves = new Points(leavesGeo, new PointsMaterial({ map: leafTexture(), size: 0.2, vertexColors: true, transparent: true, alphaTest: 0.4, depthWrite: false }))
+  leavesGeo.setAttribute('position', new BufferAttribute(new Float32Array(FLAKES * 3), 3))
+  leavesGeo.setAttribute('color', new BufferAttribute(new Float32Array(FLAKES * 3), 3))
+  const leaves = new Points(leavesGeo, new PointsMaterial({ map: snowTexture(), size: 0.2, vertexColors: true, transparent: true, alphaTest: 0.4, depthWrite: false }))
   leaves.frustumCulled = false
   g.add(leaves)
   const moteSeeds = Array.from({ length: IN }, (_, i) => ({ s: sides[i % 2], a: Math.random() * 6.28, f: Math.random(), v: 0.8 + Math.random() * 0.9 }))
   const sparkSeeds = Array.from({ length: OUT }, () => ({ a: Math.random() * 6.28, f: Math.random(), v: 1.1 + Math.random() * 1.5, r: Math.random() * 0.3 }))
   const dustSeeds = Array.from({ length: DUST }, () => ({ a: Math.random() * 6.28, r: 1.4 + Math.random() * 2.2, v: 1.5 + Math.random() * 2, y: Math.random() * 0.5 }))
-  const leafSeeds = Array.from({ length: LEAVES }, (_, i) => ({ s: sides[i % 2], a: Math.random() * 6.28, f: Math.random(), v: 0.5 + Math.random() * 0.5, c: new Color().setHSL(0.08 + Math.random() * 0.25, 0.7, 0.35 + Math.random() * 0.15) }))
+  const leafSeeds = Array.from({ length: FLAKES }, (_, i) => ({ s: sides[i % 2], a: Math.random() * 6.28, f: Math.random(), v: 0.5 + Math.random() * 0.5, c: new Color().setHSL(0.55 + Math.random() * 0.08, 0.5, 0.82 + Math.random() * 0.14) }))
 
   return {
     update(t) {
@@ -767,7 +767,7 @@ export function buildProps(scene) {
   npcs.push(stand(root, { x: SELL_STAND.x, z: SELL_STAND.z, rot: 0.08, awning: ['#2fd14a', '#f4f4f4'], title: 'Sell Loot', titleFill: ['#f6ff7a', '#b6f22a', '#5fc81a'] }))
   leaderboard(root, -6, -22.5, 0.05, 'power', 'Power', ['#ffe48a', '#f6a21a'], 'Power', '#ffb23a')
   leaderboard(root, 4.5, -24, 0, 'rebirths', 'Rebirths', ['#ff8a8a', '#e2222a'], 'Rebirths', '#ff5a5a')
-  leaderboard(root, 14, -23, -0.2, 'leaves', 'Leaves Cleaned', ['#c4ff7a', '#4cc81a'], 'Leaves', '#7aff4a')
+  leaderboard(root, 14, -23, -0.2, 'leaves', 'Snow Cleared', ['#e6f6ff', '#6cc4f2'], 'Snow', '#9fdcff')
   leaderboard(root, 23, -23.5, -0.3, 'level', 'Levels', ['#a8e4ff', '#1f9bff'], 'Level', '#62c4ff')
 
   // Beside the west opening (left as you walk out to the field): the controls reference.
@@ -860,7 +860,7 @@ export function buildProps(scene) {
   fb.add(fbPanel.object)
   addCollider(9, 12.5, 3.1, 0.6, 3.3, facing(9, 12.5, 0, 4))
 
-  npcs.push(stand(root, { x: 2, z: 12, rot: Math.PI, awning: ['#ee2a2a', '#f4f4f4'], title: 'Vacuums', titleFill: ['#ffb05a', '#ff5a1a', '#e2261a'], titleStroke: '#3a0a00' }))
+  npcs.push(stand(root, { x: 2, z: 12, rot: Math.PI, awning: ['#2a7ae0', '#f4f4f4'], title: 'Shovels', titleFill: ['#ffffff', '#9fdcff', '#4aa8e8'], titleStroke: '#0a2a4a' }))
 
   // Southwest: twin turbine showcase.
   const vac = vacuumModel()
@@ -886,18 +886,18 @@ export function buildProps(scene) {
   luckSign.object.rotation.y = Math.PI / 2
   root.add(luckSign.object)
   // One sign per further zone boundary: its Luck and the best loot tier it tends to drop.
-  const ZONE_COUNT = LEAVES.zones.luck.length
-  for (let zi = 1; zi < LEAVES.zones.luck.length; zi++) {
+  const ZONE_COUNT = SNOW.zones.luck.length
+  for (let zi = 1; zi < SNOW.zones.luck.length; zi++) {
     const tier = zoneTier(zi, ZONE_COUNT)
     const { fill, glow } = RARITY[tier]
     const sign = textLabel(
       [
         { text: tier, px: 120, fill: [glow, fill], stroke: '#1a1a1a' },
-        { text: `x${LEAVES.zones.luck[zi]} Luck`, px: 84, fill: [glow, fill], stroke: '#1a1a1a' },
+        { text: `x${SNOW.zones.luck[zi]} Luck`, px: 84, fill: [glow, fill], stroke: '#1a1a1a' },
       ],
       { height: 5.5, billboard: false, doubleSided: false },
     )
-    sign.object.position.set(LEAVES.zones.edges[zi], 5.5, 0)
+    sign.object.position.set(SNOW.zones.edges[zi], 5.5, 0)
     sign.object.rotation.y = Math.PI / 2
     root.add(sign.object)
   }

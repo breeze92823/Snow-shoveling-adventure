@@ -109,10 +109,10 @@ const rng = (seed) => {
 
 const barkMat = () => studMat(C.trunk, '#a34a24', 1)
 const palettes = {
-  oak: [studMat('#3ec43a', '#33b22f'), studMat('#58d94a', '#46c63d')],
-  pine: [studMat('#1f7a3a', '#196a31'), studMat('#2a9448', '#238040')],
-  maple: [studMat('#e8721c', '#d4620f'), studMat('#c93a1a', '#b32f12'), studMat('#f2a516', '#e0950c')],
-  birch: [studMat('#f2c53a', '#e0b22a'), studMat('#d9e046', '#c6cd38')],
+  oak: [studMat('#e6f1fa', '#d3e4f2'), studMat('#f5fbff', '#e2eef8')],
+  pine: [studMat('#1f5e4a', '#194f3e'), studMat('#d8ebe6', '#c4ddd6')],
+  maple: [studMat('#b9d3e8', '#a6c4dc'), studMat('#9cbbd6', '#8aabc9'), studMat('#d3e6f5', '#c0d8ec')],
+  birch: [studMat('#eaf4fb', '#d9eaf6'), studMat('#cfe3f2', '#bcd5e8')],
 }
 const birchBark = () => studMat('#ece8e0', '#d8d2c6', 1)
 const darkBark = () => studMat('#3a3430', '#2c2623', 1)
@@ -239,7 +239,7 @@ function flushTrees(parent) {
 }
 
 function stoneCluster(parent, x, y, z, seed) {
-  const mat = studMat(C.stone, '#bdb2d8')
+  const mat = studMat(C.stone, '#a9bccd')
   const r = (k) => Math.sin(seed * 7.13 + k * 3.7) * 0.5 + 0.5
   for (let i = 0; i < 5; i++) {
     const s = 2 + r(i) * 2.5
@@ -313,7 +313,7 @@ export function buildHub(scene) {
   block(root, end - 16, end, -F, F, 26, { seed: 49 })
 
   const bridgeX = end + 18
-  const stone = studMat(C.stone, '#bdb2d8')
+  const stone = studMat(C.stone, '#a9bccd')
   root.add(mesh(worldBox(6, 2.2, 2 * F + 4), stone, bridgeX, 15, 0))
   const vine = studMat(C.topA, C.topB, 1)
   for (let z = -F + 1; z < F; z += 1.4) {
@@ -342,7 +342,7 @@ export function buildHub(scene) {
 
   flushTrees(root)
 
-  // The field's leaf piles and loose leaves live in leaves.js.
+  // The field's leaf piles and loose leaves live in snow.js.
 
   // Clouds on the sky dome.
   const cloudMat = new SpriteMaterial({ map: cloudSprite(), fog: false, depthWrite: false, transparent: true })

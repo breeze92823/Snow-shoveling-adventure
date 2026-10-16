@@ -1,5 +1,5 @@
 // Touch controls (phones/tablets): a floating move stick on the left of the world, drag-to-look and
-// pinch-to-zoom on the right, plus BLOW (hold) / JUMP / menu buttons. Everything feeds inputState,
+// pinch-to-zoom on the right, plus DIG (hold) / JUMP / menu buttons. Everything feeds inputState,
 // exactly like the keyboard and mouse do, so the rest of the game does not know the difference.
 import './touch.css'
 import { inputState } from './input.js'
@@ -22,7 +22,7 @@ export function createTouchControls({ showMenu }) {
     <button class="tc-btn tc-menu" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></button>
     <button class="tc-btn tc-full" aria-label="Fullscreen" hidden><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button class="tc-btn tc-jump" aria-label="Jump"><svg viewBox="0 0 24 24"><path d="M12 19V6M6 11l6-6 6 6" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    <button class="tc-btn tc-blow" aria-label="Blow leaves"><span>BLOW</span></button>
+    <button class="tc-btn tc-blow" aria-label="Dig snow"><span>DIG</span></button>
     <div class="tc-rotate"><div>&#8635;</div><p>Rotate your phone</p><small>Snow Shoveling Adventure plays in landscape</small></div>`
   document.body.appendChild(root)
   const stick = root.querySelector('.tc-stick')

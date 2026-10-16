@@ -2,12 +2,12 @@
 // PlayerAnimator + LocomotionCycle. States idle / run / airborne / landing are
 // blended through pose buffers; the walk and run are ONE cycle at two depths,
 // its phase advancing with distance travelled so the feet stay planted at any
-// speed. The right arm is the BLOWER layer on top: it holds the blower steady at
-// the hip (the blower is parented to ArmR1 and points along the arm's bind
-// forward) and dips the nozzle a little while blowing. Writes only to bones and
-// the avatar root's rotation / position.y (the player group owns world placement).
+// speed. While digging, the DIG layer blends the torso and legs toward the shovel stroke
+// (the arms are placed afterwards by heldShovel.js, which grips the shovel with both hands).
+// Writes only to bones and the avatar root's rotation / position.y (the player group owns world placement).
 import { ANIM } from '../config.js'
-import { BONE_INDEX, PlayerRig, PoseBuffer } from './rig.js'
+import { PlayerRig, PoseBuffer } from './rig.js'
+import { crossed, strokeAt } from './digStroke.js'
 
 const TAU = Math.PI * 2
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v)
@@ -19,7 +19,6 @@ const kneeCurve = (phase) => {
   return raw > 0 ? raw * raw : 0
 }
 
-const RIGHT_ARM = ['ArmR1', 'ArmR2']
 const L = ANIM.locomotion
 
 export function makeAnimator(root) {
@@ -48,8 +47,9 @@ class PlayerAnimator {
     this.idleTime = 0
     this.airTime = 0
     this.bank = 0
-    this.holdWeight = 1
-    this.blowWeight = 0
+    // digging stroke: w = blend weight, u = cycle position; impact / thrown are one-shot flags the
+    // caller clears; the rest is the sampled key (lean, crouch, dy, dz, tilt, yaw)
+    this.dig = { w: 0, u: 0, impact: false, thrown: false, lean: 0, crouch: 0, dy: 0, dz: 0, tilt: 0, yaw: 0 }
   }
 
   dispose() {
@@ -58,14 +58,14 @@ class PlayerAnimator {
     this.root.position.y = 0
   }
 
-  // input: { grounded, speed, verticalVelocity, turn (-1..1), blowing }
+  // input: { grounded, speed, verticalVelocity, turn (-1..1), digging, strength }
   update(dt, input) {
     if (!(dt > 0)) return
     this.stateTime += dt
     this.resolveState(dt, input)
     this.writePose(dt, input)
     this.blend(dt)
-    this.applyBlowerLayer(dt, input)
+    this.applyDig(dt, input)
     this.rig.applyPose(this.output)
     this.applyVisual(dt, input)
   }
@@ -182,19 +182,37 @@ class PlayerAnimator {
     }
   }
 
-  // Right arm holds the blower at the hip (released in the air); blowing dips the nozzle.
-  applyBlowerLayer(dt, input) {
-    const holdGoal = this.state === 'airborne' ? 0 : 1
-    this.holdWeight += (holdGoal - this.holdWeight) * (1 - Math.exp(-12 * dt))
-    this.blowWeight += ((input.blowing ? 1 : 0) - this.blowWeight) * (1 - Math.exp(-10 * dt))
-    this.layer.applyDefinition(ANIM.blower.hold)
-    this.layer.add('ArmR1', ANIM.blower.blowPitch * this.blowWeight)
-    const out = this.output.rotations
-    const src = this.layer.rotations
-    for (const bone of RIGHT_ARM) {
-      const at = BONE_INDEX[bone] * 3
-      for (let k = 0; k < 3; k++) out[at + k] = lerp(out[at + k], src[at + k], this.holdWeight)
+  // Digging layer: advances the stroke and blends the torso / legs towards it (lean, knee bend,
+  // body dip). The arms are placed afterwards by heldShovel.js (IK onto the shovel).
+  applyDig(dt, input) {
+    const d = this.dig
+    const D = ANIM.dig
+    const want = input.digging && input.grounded && input.speed < D.maxSpeed
+    d.w += ((want ? 1 : 0) - d.w) * (1 - Math.exp(-D.blendRate * dt))
+    if (!want && d.w < 0.002) {
+      d.w = 0
+      d.u = 0
+      return
     }
+    if (want) {
+      const scale = clamp(1 + Math.log10(Math.max(1, input.strength ?? 1)) * D.strengthLog, 1, D.maxScale)
+      const prev = d.u
+      d.u = (d.u + (dt * scale) / D.cycle) % 1
+      if (crossed(prev, d.u, D.impactU)) d.impact = true
+      if (crossed(prev, d.u, D.throwU)) d.thrown = true
+    }
+    strokeAt(d.u, d)
+    const p = this.layer
+    p.reset()
+    p.set('Spine1', d.lean)
+    p.set('Spine2', d.lean * 0.5)
+    p.set('Neck1', -d.lean * 0.8)
+    p.set('LegL1', -d.crouch * 0.55)
+    p.set('LegR1', -d.crouch * 0.55)
+    p.set('LegL2', d.crouch * 1.0)
+    p.set('LegR2', d.crouch * 1.0)
+    p.bobY = -d.crouch * 0.2
+    this.output.lerpBetween(this.output, p, d.w)
   }
 
   applyVisual(dt, input) {

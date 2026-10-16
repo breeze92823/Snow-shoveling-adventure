@@ -3,7 +3,7 @@
 // Plain DOM over the canvas. Menu tiles open a placeholder panel; purchase
 // buttons show a toast (no store yet).
 import './hud.css'
-import { DEV_MODE, DISABLE_TUTORIALS, INDEX, BUY_WITH_BLOXBUX, LEAVES, LEVEL_UP_POPUP, FREE_GIFT, DAILY, UPGRADES, VACUUMS, AURAS, VACUUM_RARITY } from './config.js'
+import { DEV_MODE, DISABLE_TUTORIALS, INDEX, BUY_WITH_BLOXBUX, SNOW, LEVEL_UP_POPUP, FREE_GIFT, DAILY, UPGRADES, VACUUMS, AURAS, VACUUM_RARITY } from './config.js'
 import { player, respawn } from './player.js'
 import { ICONS, auraIcon, vacuumIcon } from './icons.js'
 import { mmss } from './timers.js'
@@ -74,7 +74,7 @@ function template() {
     <div class="trail">
       <i class="trail-flag">🏁</i>
       <div class="trail-bar">
-        ${[...LEAVES.zones.palettes]
+        ${[...SNOW.zones.palettes]
           .map((p, i) => `<div class="trail-seg" style="--c:${p[0]}"><span class="o-thin">${i + 1}</span></div>`)
           .reverse()
           .join('')}
@@ -143,7 +143,7 @@ function template() {
       </div>
       <div class="help-col" data-task="blow">
         <div class="chk" aria-hidden="true">&#10003;</div>
-        <h3 class="o">Blow Leaves</h3>
+        <h3 class="o">Dig Snow</h3>
         <div class="keys"><kbd data-code="KeyF">F</kbd><span class="or o-thin">or</span><kbd class="wide" data-code="Click">CLICK</kbd></div>
         <div class="cap o-thin">Try it</div>
       </div>
@@ -214,7 +214,7 @@ function template() {
     <div class="upg vac">
       <div class="upg-head">
         <i class="vac-flame">${ICONS.vacFlame}</i>
-        <h2 class="o">Vacuums</h2>
+        <h2 class="o">Shovels</h2>
         <button class="upg-x pressable" data-act="closeVacuums"><svg viewBox="0 0 40 40"><path d="M11 11 L29 29 M29 11 L11 29" stroke="#121212" stroke-width="10" stroke-linecap="round"/><path d="M11 11 L29 29 M29 11 L11 29" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg></button>
       </div>
       <div class="upg-body">
@@ -904,13 +904,13 @@ export function createHud({ showMenu }) {
   tick()
   setInterval(tick, 250)
   // Corridor progress: hub edge (bottom) -> end of the field (top).
-  const trailSpan = LEAVES.minX - LEAVES.maxX
+  const trailSpan = SNOW.minX - SNOW.maxX
   let wasInField = false
   const trailLoop = () => {
-    const t = Math.min(1, Math.max(0, (LEAVES.minX - player.position.x) / trailSpan))
+    const t = Math.min(1, Math.max(0, (SNOW.minX - player.position.x) / trailSpan))
     bind.trailMe.style.bottom = `calc(${t * 100}% - 20px)`
     // In the leaf corridor the menu tiles and level bar give way to a Home button.
-    const inField = player.position.x < LEAVES.minX
+    const inField = player.position.x < SNOW.minX
     if (inField !== wasInField) root.classList.toggle('in-field', (wasInField = inField))
     requestAnimationFrame(trailLoop)
   }

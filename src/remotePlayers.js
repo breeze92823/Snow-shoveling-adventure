@@ -7,7 +7,7 @@ import { net } from './net.js'
 import { textLabel } from './labels.js'
 import { buildDefaultCharacter, loadBaseCharacter } from './avatar/character.js'
 import { applyProportions, attachEquippedAccessories } from './avatar/loader.js'
-import { animateHeldVacuum, attachBlower, setHeldVacuum } from './avatar/blower.js'
+import { attachHeldShovel } from './avatar/heldShovel.js'
 import { disposeAnimator, makeAnimator } from './avatar/animator.js'
 import { buildAuraFx } from './auraFx.js'
 
@@ -19,11 +19,11 @@ class Remote {
     this.group.visible = false
     parent.add(this.group)
     this.avatar = null
-    this.blower = null
+    this.shovel = null
     this.animator = null
     this.avatarJson = null // what the current rig was built from
     this.generation = 0
-    this.vacuum = ''
+    this.vacuum = 'battery'
     this.auraId = ''
     this.aura = null
     this.nameText = null
@@ -37,8 +37,8 @@ class Remote {
     if (this.avatar) this.group.remove(this.avatar)
     disposeAnimator(this.animator)
     this.avatar = next
-    this.blower = attachBlower(next)
-    this.vacuumApplied = null
+    this.shovel?.dispose()
+    this.shovel = attachHeldShovel(next, () => this.vacuum)
     this.group.add(next)
     this.animator = makeAnimator(next)
   }
@@ -91,10 +91,7 @@ class Remote {
     this.syncName(p.username || 'Player')
     this.syncAvatar(p.avatar)
     this.syncAura(p.aura)
-    if (this.vacuumApplied !== p.vacuum) {
-      this.vacuumApplied = p.vacuum
-      setHeldVacuum(this.blower, p.vacuum || 'battery')
-    }
+    this.vacuum = p.vacuum || 'battery'
 
     const g = this.group
     const k = this.placed ? 1 - Math.exp(-NET.remoteLerp * dt) : 1
@@ -111,9 +108,11 @@ class Remote {
       speed: p.speed01 * PHYSICS.moveSpeed,
       verticalVelocity: this.vy,
       turn: 0,
-      blowing: p.pose === 'blow',
+      digging: p.pose === 'blow',
+      strength: 1,
     })
-    animateHeldVacuum(this.blower, t)
+    this.shovel?.update(dt, this.animator)
+    if (this.animator) this.animator.dig.impact = this.animator.dig.thrown = false
     this.aura?.update(t, dt)
   }
 
