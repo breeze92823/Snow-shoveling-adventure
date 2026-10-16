@@ -231,7 +231,19 @@ export function createDigField(scene, quality = 1) {
           const d = Math.sqrt(d2)
           p.x = cx + (dx / d) * r
           p.z = cz + (dz / d) * r
-        } else p.x = maxX + r // centre inside the block: leave toward the hub
+        } else {
+          // Centre inside the block (a frame hitch or a jump tunnelled in): leave by the nearest
+          // face, not always the hub side, or the player is flung back through the whole field.
+          const toW = p.x - minX
+          const toE = maxX - p.x
+          const toN = p.z - minZ
+          const toS = maxZ - p.z
+          const m = Math.min(toW, toE, toN, toS)
+          if (m === toW) p.x = minX - r
+          else if (m === toE) p.x = maxX + r
+          else if (m === toN) p.z = minZ - r
+          else p.z = maxZ + r
+        }
       }
     }
   })
