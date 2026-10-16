@@ -2,8 +2,9 @@
 // row from the server carries that player's Bloxity avatar JSON ({ equipped, proportions, skin }),
 // dressed onto the base rig exactly like remotePlayers.js. No #1 row, no avatar (guest / offline),
 // bad JSON or a failed load all fall back to the default character. Never throws.
-import { CylinderGeometry, Group, MeshStandardMaterial } from 'three'
+import { AdditiveBlending, CanvasTexture, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, SRGBColorSpace } from 'three'
 import { LEADER_HALL } from './config.js'
+import { realm } from './frostRealm.js'
 import { buildDefaultCharacter, loadBaseCharacter } from './avatar/character.js'
 import { applyProportions, attachEquippedAccessories } from './avatar/loader.js'
 import { disposeAnimator, makeAnimator } from './avatar/animator.js'
@@ -26,6 +27,29 @@ function plinthParts() {
     }
   }
   return shared
+}
+
+// Soft radial halo, shared; each statue gets its own material so opacity can differ.
+let auraGeo = null
+let auraTex = null
+function auraGeometry() {
+  return (auraGeo ??= new PlaneGeometry(5, 7))
+}
+function auraMaterial(color) {
+  if (!auraTex) {
+    const c = document.createElement('canvas')
+    c.width = c.height = 128
+    const g = c.getContext('2d')
+    const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62)
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)')
+    grad.addColorStop(0.45, 'rgba(255,255,255,0.35)')
+    grad.addColorStop(1, 'rgba(255,255,255,0)')
+    g.fillStyle = grad
+    g.fillRect(0, 0, 128, 128)
+    auraTex = new CanvasTexture(c)
+    auraTex.colorSpace = SRGBColorSpace
+  }
+  return new MeshBasicMaterial({ map: auraTex, color, transparent: true, opacity: 0, depthWrite: false, blending: AdditiveBlending, side: DoubleSide })
 }
 
 // A little gold trophy, painted once and shared by the board titles and the statue labels.
@@ -85,10 +109,41 @@ export function createTopPlayerStatue(parent, { key, title, fill, position, yaw 
   let avatarJson = ''
   let generation = 0
 
+  // Frost Realm glow: emissive tint on this statue's own (cloned) materials plus a soft additive aura.
+  const G = S.glow
+  const glowColor = new Color(G.color)
+  const aura = new Mesh(auraGeometry(), auraMaterial(G.color))
+  aura.position.y = S.plinthHeight + 1.6 * S.scale
+  aura.visible = false
+  root.add(aura)
+  let glowMats = []
+  let glow = 0
+  let clock = 0
+
+  function applyGlow() {
+    const k = G.emissive * glow
+    for (const m of glowMats) {
+      m.emissive.copy(glowColor)
+      m.emissiveIntensity = k
+    }
+  }
+
   function setAvatar(next) {
     if (avatar) stage.remove(avatar)
     disposeAnimator(animator)
     avatar = next
+    glowMats = []
+    next.traverse((o) => {
+      if (!o.isMesh || !o.material) return
+      const own = (m) => {
+        if (!m.emissive) return m
+        const c = m.clone()
+        glowMats.push(c)
+        return c
+      }
+      o.material = Array.isArray(o.material) ? o.material.map(own) : own(o.material)
+    })
+    applyGlow()
     stage.add(next)
     animator = makeAnimator(next)
   }
@@ -135,12 +190,25 @@ export function createTopPlayerStatue(parent, { key, title, fill, position, yaw 
       void syncAvatar(row?.avatar || '')
     },
     update(dt) {
+      const target = realm.active ? 1 : 0
+      if (glow !== target) {
+        glow = target > glow ? Math.min(target, glow + dt * G.fade) : Math.max(target, glow - dt * G.fade)
+        applyGlow()
+      }
+      aura.visible = glow > 0
+      if (aura.visible) {
+        clock += dt
+        const pulse = 1 + Math.sin(clock * 2.2) * G.pulse
+        aura.material.opacity = G.aura * glow * pulse
+        aura.scale.setScalar(S.scale * (0.95 + 0.05 * pulse))
+      }
       animator?.update(dt, { grounded: true, speed: 0, verticalVelocity: 0, turn: 0, digging: false, strength: 1, celebrate: true })
     },
     dispose() {
       parent.remove(root)
       generation++
       disposeAnimator(animator)
+      aura.material.dispose()
       headLabel.dispose()
       nameLabel.dispose()
     },

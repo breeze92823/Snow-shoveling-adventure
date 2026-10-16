@@ -365,6 +365,7 @@ export const LEADER_HALL = {
     plinthRadius: 1.2,
     plinthHeight: 0.5,
     labelY: 5.3, // label centre above the plinth top
+    glow: { color: '#7fe3ff', emissive: 0.55, aura: 0.55, pulse: 0.15, fade: 3 }, // Frost Realm only: body glow, halo opacity, pulse depth, fade speed
   },
 }
 
