@@ -31,6 +31,15 @@ const IOPEN = OPEN_BX * B // first vertex column of the open strip
 const smooth = (t) => t * t * (3 - 2 * t)
 const frac = (x) => x - Math.floor(x)
 const hash = (i, j) => frac(Math.sin(i * 127.1 + j * 311.7) * 43758.5453)
+function vnoise(x, z) {
+  const i = Math.floor(x)
+  const j = Math.floor(z)
+  const fx = smooth(x - i)
+  const fz = smooth(z - j)
+  const a = hash(i, j) + (hash(i + 1, j) - hash(i, j)) * fx
+  const b = hash(i, j + 1) + (hash(i + 1, j + 1) - hash(i, j + 1)) * fx
+  return a + (b - a) * fz
+}
 
 export function createDigField(scene, quality = 1) {
   const group = new Group()
@@ -57,10 +66,19 @@ export function createDigField(scene, quality = 1) {
   const colX = new Uint8Array(STRIDE) // zone of each vertex column
   for (let i = 0; i <= NX; i++) colX[i] = zoneAt(X0 + i * S)
 
+  // Rolling mounds on the undug snow: three octaves of value noise, -0.5..0.5 (0 on open ground).
+  const lump = new Float32Array(dug.length)
+  const dipCol = new Color(DIG.dipColor)
+  const LS = DIG.lumpScale
   for (let j = 0; j <= NZ; j++) {
     for (let i = 0; i <= NX; i++) {
       const k = j * STRIDE + i
-      base[k] = i >= IOPEN ? 0 : TOP
+      if (i < IOPEN) {
+        const x = (X0 + i * S) / LS
+        const z = (Z0 + j * S) / LS
+        lump[k] = vnoise(x, z) * 0.62 + vnoise(x * 2.7, z * 2.7) * 0.26 + vnoise(x * 6.5, z * 6.5) * 0.12 - 0.5
+      }
+      base[k] = i >= IOPEN ? 0 : TOP + lump[k] * DIG.lumpAmp
       height[k] = base[k]
       pos.set([X0 + i * S, base[k], Z0 + j * S], k * 3)
       nrm.set([0, 1, 0], k * 3)
@@ -82,7 +100,31 @@ export function createDigField(scene, quality = 1) {
     }
   }
   geo.setIndex(new BufferAttribute(idx, 1))
-  const mesh = new Mesh(geo, new MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 }))
+  const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+  // Procedural surface detail from the surface itself: blue-grey strata on steep cut walls, a faint stud
+  // pattern on the exposed floor, and a few static glints on the undug snow.
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPos;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvPos = position;')
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vPos;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        vec3 fn = normalize(cross(dFdx(vPos), dFdy(vPos)));
+        float wall = smoothstep(0.25, 0.7, 1.0 - abs(fn.y));
+        float band = sin(vPos.y * ${DIG.strataBand.toFixed(2)} + sin(vPos.x * 3.1 + vPos.z * 2.3) * 0.8);
+        float layer = smoothstep(0.5, 0.95, band);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.62, 0.76, 0.95), wall * ${DIG.strataTint.toFixed(2)} * (0.4 + 0.6 * layer));
+        float flr = (1.0 - smoothstep(0.12, 0.3, vPos.y)) * (1.0 - wall);
+        float sd = length(fract(vPos.xz / 0.5) - 0.5);
+        diffuseColor.rgb *= 1.0 - flr * 0.12 * smoothstep(0.18, 0.24, sd) * smoothstep(0.34, 0.28, sd);
+        diffuseColor.rgb *= 1.0 + flr * 0.05 * smoothstep(0.24, 0.16, sd);
+        float gl = fract(sin(dot(floor(vPos.xz * 9.0), vec2(12.9898, 78.233))) * 43758.5453);
+        diffuseColor.rgb += step(1.0 - ${DIG.sparkle.toFixed(4)}, gl) * (1.0 - flr) * (1.0 - wall) * 0.22;`,
+      )
+  }
+  const mesh = new Mesh(geo, mat)
+  // The open strip and dug pits sit at y ~ 0, coplanar with the world ground plane: bias the field toward the camera so they don't z-fight.
   mesh.receiveShadow = quality > 0.5
   mesh.frustumCulled = false
   group.add(mesh)
@@ -99,7 +141,10 @@ export function createDigField(scene, quality = 1) {
     const dark = 1 - DIG.pitShade * Math.sin(Math.PI * Math.min(1, d)) // deeper, shadowed mid-dig
     const zi = colX[i]
     const jit = 0.95 + 0.05 * hash(i, j)
-    tmp.copy(snowCol[zi]).lerp(floorCol[zi], t).multiplyScalar(dark * (i >= IOPEN ? 1 : jit))
+    // Dips shade toward cool lavender-blue, mound tops brighten; both fade as the spot is dug out.
+    const lp = lump[k]
+    tmp.copy(snowCol[zi]).lerp(dipCol, Math.max(0, -lp * 2) * DIG.dipTint * (1 - t)).lerp(floorCol[zi], t)
+    tmp.multiplyScalar(dark * (i >= IOPEN ? 1 : jit * (1 + 0.06 * Math.max(0, lp * 2) * (1 - t))))
     const v = k * 3
     pos[v + 1] = height[k]
     nrm[v] = nx / len
@@ -300,6 +345,7 @@ export function createDigField(scene, quality = 1) {
   let sprayAcc = 0
   let dustAcc = 0
   const spot = { x: 0, z: 0, active: false }
+  let removing = false // this frame the shovel is actually taking snow (field block or training mound)
 
   // Digs the whole block at (tx, tz): every vertex of it sinks together, opening one square pit.
   function dig(dt, tx, tz) {
@@ -329,6 +375,7 @@ export function createDigField(scene, quality = 1) {
       }
     }
     if (!changed) return
+    removing = true
     dirty = true
     spot.x = cellX
     spot.z = cellZ
@@ -406,7 +453,13 @@ export function createDigField(scene, quality = 1) {
       flag(0, NZ)
     },
 
+    // True while the shovel is actually removing snow (a block being dug or a mound being hit).
+    get removing() {
+      return removing
+    },
+
     update(dt, digging, player) {
+      removing = false
       if (digging) {
         const reach = DIG.reach * reachMultiplier()
         reachTarget.x = player.position.x + Math.sin(player.facing) * reach
@@ -418,7 +471,10 @@ export function createDigField(scene, quality = 1) {
           if (tg.locked?.()) continue
           const dx = tg.x - reachTarget.x
           const dz = tg.z - reachTarget.z
-          if (dx * dx + dz * dz < (tg.radius + 0.6) ** 2) tg.blow(1, dx, dz, dt, bp)
+          if (dx * dx + dz * dz < (tg.radius + 0.6) ** 2) {
+            tg.blow(1, dx, dz, dt, bp)
+            removing = true
+          }
         }
       }
       if (live === 0) return

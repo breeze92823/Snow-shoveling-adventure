@@ -11,7 +11,19 @@ export const addPusher = (fn) => pushers.push(fn)
 
 // (cx, cz) centre, w along local X, d along local Z, solid from y0 to y1.
 export function addCollider(cx, cz, w, d, y1, rotY = 0, y0 = GROUND_Y) {
-  boxes.push({ cx, cz, hx: w / 2, hz: d / 2, y0, y1, cos: Math.cos(rotY), sin: Math.sin(rotY) })
+  const box = { cx, cz, hx: w / 2, hz: d / 2, y0, y1, cos: Math.cos(rotY), sin: Math.sin(rotY) }
+  boxes.push(box)
+  return box
+}
+
+// Props that move or vanish with the Frost Realm (frostRealm.js): shift a box, or take it out of / put it back into play.
+export function moveCollider(box, cx, cz, rotY = 0) {
+  Object.assign(box, { cx, cz, cos: Math.cos(rotY), sin: Math.sin(rotY) })
+}
+export function setColliderActive(box, on) {
+  const i = boxes.indexOf(box)
+  if (on && i < 0) boxes.push(box)
+  else if (!on && i >= 0) boxes.splice(i, 1)
 }
 
 // Point into box-local coordinates (inverse of a three.js Y rotation).

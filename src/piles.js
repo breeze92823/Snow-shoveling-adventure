@@ -7,7 +7,7 @@ const P = SNOW.piles
 export const ZONE_COUNT = Z.edges.length - 1
 
 // hp of a pile in zone `zi`: clear time ~ hp / blowerPower.
-export const zoneHp = (zi) => P.baseHp * Z.luck[zi] ** P.exponent
+export const zoneHp = (zi) => P.baseHp * P.hardness * Z.luck[zi] ** P.exponent
 
 // Zone of a world x (zone i spans edges[i+1] <= x < edges[i]); matches zoneOf() in the shaders.
 export function zoneAt(x) {

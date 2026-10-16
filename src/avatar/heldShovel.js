@@ -27,6 +27,9 @@ const SHOVEL_SCALE = 1.2 // held shovel size vs the model (about 0.8x the charac
 const GRIP_ON_SHAFT = 0.8 // shaft height (shovel space) where the hand grips, just under the D-grip
 const HOLD_TILT = -0.75 // blade forward / down (character space, +X pitch tips the top forward)
 const ARM_LENGTH = 2.4 // procedural arm: pivot to hand
+const CARRY_TILT = 2.5 // idle carry: blade up and back over the shoulder (like the axe in Chop Trees)
+const CARRY_HAND = { x: 0.6, y: -0.9, z: 1.7 } // idle fist, from the right shoulder: in, down, forward
+const CARRY_EASE = 7 // 1/s; how fast the carry pose blends in and out
 const HAND_FORWARD = 0.45 // hand offset in front of the arm, so the fist clears the arm's front face
 
 // Skin-coloured fist wrapped round the shaft (plus a thumb knuckle) so the shovel reads as held.
@@ -367,15 +370,27 @@ export function attachHeldShovel(avatar, shovelId) {
   const top = new Vector3()
   const p = new Vector3()
   const idleZ = right.holder.position.z
+  let carry = 0 // eased 0..1: standing still and not digging -> shovel carried over the shoulder
   return {
     update(dt, animator) {
       const want = SHOVEL_LOOKS[shovelId()] ? shovelId() : START_SHOVEL
       if (shovel.userData.id !== want) skin(shovel, want)
       const d = animator?.dig
       const w = d?.w ?? 0
-      pivot.rotation.set(lerp(HOLD_TILT, d?.tilt ?? 0, w), (d?.yaw ?? 0) * w, 0)
-      right.holder.position.z = lerp(idleZ, idleZ - HAND_FORWARD, w) // fist clears the arm only when hanging
+      const idle = animator?.state === 'idle' && w < 0.02 ? 1 : 0
+      carry += (idle - carry) * (1 - Math.exp(-CARRY_EASE * dt))
+      if (carry < 0.002) carry = 0
+      const rest = lerp(HOLD_TILT, CARRY_TILT, carry)
+      pivot.rotation.set(lerp(rest, d?.tilt ?? 0, w), (d?.yaw ?? 0) * w, 0)
+      right.holder.position.z = lerp(idleZ, idleZ - HAND_FORWARD, Math.max(w, carry)) // fist clears the arm only when hanging
       if (leftFist) leftFist.visible = w > 0.05
+      if (carry > 0.002 && w < 0.5) {
+        // Idle: right fist raised in front of the chest, the left arm hangs free.
+        avatar.updateMatrixWorld(true)
+        const sr = avatar.worldToLocal(right.upper.getWorldPosition(new Vector3()))
+        target.set(sr.x + CARRY_HAND.x, sr.y + CARRY_HAND.y, sr.z + CARRY_HAND.z)
+        solveArm(avatar, right, target, carry * (1 - w), rootQ)
+      }
       if (w < 0.002 || !left) return
 
       // Both hands onto the shovel: right hand to the stroke position in front of the shoulders...

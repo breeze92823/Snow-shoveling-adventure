@@ -20,7 +20,6 @@ export const SHOVEL_LOOKS = {
   cannon: { shape: 'square', shaft: '#1c1c22', grip: '#25252c', blade: '#14141a', trim: '#6a3acf', gem: '#9a4cff' },
   quadvent: { shape: 'flame', shaft: '#2a2224', grip: '#6a3a3a', blade: '#5a1410', trim: '#ff5a1a', glow: true },
   rotor: { shape: 'flame', shaft: '#2a2224', grip: '#e8453a', blade: '#e8651c', trim: '#ffb020' },
-  twin: { shape: 'spade', shaft: '#2b2f36', grip: '#2b3a3a', blade: '#1c3a35', trim: '#37e0b0', gem: '#37e0b0', glow: true },
   triple: { shape: 'wide', shaft: '#2b2f3a', grip: '#4a3a8f', blade: '#2a1a5e', trim: '#c46bff', glow: true },
   heavy: { shape: 'square', shaft: '#2e2e32', grip: '#a8884a', blade: '#6b4a1e', trim: '#35c9b5', gem: '#35c9b5' },
   fourengine: { shape: 'wide', shaft: '#2b2f3a', grip: '#3fb0e0', blade: '#1fb89a', trim: '#7a5cf0', glow: true },

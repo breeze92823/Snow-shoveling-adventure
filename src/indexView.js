@@ -9,7 +9,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { buildModel } from './r3f.js'
 import { GenericItem, MODELS } from './lootModels.jsx'
 
-const SIZE = 256 // px of each preview (the tile is ~140 CSS px; ~2x for sharpness)
+const SIZE = 192 // px of each preview (the tile is ~140 CSS px)
+const FRAME_GAP = 1 / 30 // s between redraws: the slow spin doesn't need 60 fps
 
 export function createIndexViews(slots, scrollRoot, isFound) {
   let renderer
@@ -58,13 +59,26 @@ export function createIndexViews(slots, scrollRoot, isFound) {
     return m
   }
 
+  // Build every model a little at a time while the window is open, so scrolling a tile into
+  // view never has to construct geometry / materials (the main source of scroll hitches).
+  let warmIdx = 0
+  function warm() {
+    const t0 = performance.now()
+    while (warmIdx < slots.length && performance.now() - t0 < 4) modelFor(slots[warmIdx++].name)
+  }
+
   function frame(t, dt) {
+    warm()
     for (const slot of slots) {
       if (!visible.has(slot.canvas)) continue
+      const found = isFound(slot.name)
+      // Undiscovered tiles are a static silhouette: draw once, not every frame.
+      if (!found && slot.shown === 'sil') continue
       const m = modelFor(slot.name)
-      m.tick(dt)
-      m.spin.rotation.y = t * 1.1 + slot.index * 0.7
-      scene.overrideMaterial = isFound(slot.name) ? null : silhouette
+      if (found) m.tick(dt)
+      m.spin.rotation.y = found ? t * 1.1 + slot.index * 0.7 : slot.index * 0.7
+      slot.shown = found ? 'live' : 'sil'
+      scene.overrideMaterial = found ? null : silhouette
       scene.add(m.spin)
       renderer.render(scene, camera)
       scene.remove(m.spin)
@@ -90,6 +104,10 @@ export function createIndexViews(slots, scrollRoot, isFound) {
   function loop(ms) {
     if (!active) return
     const t = ms / 1000
+    if (t - last < FRAME_GAP) {
+      raf = requestAnimationFrame(loop)
+      return
+    }
     try {
       frame(t, Math.min(0.1, t - last))
     } catch (err) {

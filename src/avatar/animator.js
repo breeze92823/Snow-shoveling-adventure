@@ -45,6 +45,7 @@ class PlayerAnimator {
     this.blendDuration = 0
     this.phase = 0
     this.idleTime = 0
+    this.danceTime = 0
     this.airTime = 0
     this.bank = 0
     // digging stroke: w = blend weight, u = cycle position; impact / thrown are one-shot flags the
@@ -58,7 +59,9 @@ class PlayerAnimator {
     this.root.position.y = 0
   }
 
-  // input: { grounded, speed, verticalVelocity, turn (-1..1), digging, strength }
+  // input: { grounded, speed, verticalVelocity, turn (-1..1), digging, strength, celebrate? }
+  // `celebrate` loops the cheer pose (ANIM.dance) while the character stands in place; only the
+  // leaderboard statues set it.
   update(dt, input) {
     if (!(dt > 0)) return
     this.stateTime += dt
@@ -71,6 +74,11 @@ class PlayerAnimator {
   }
 
   resolveState(dt, input) {
+    if (input.celebrate) {
+      this.airTime = 0
+      this.setState('dance', ANIM.transitions.toLocomotion)
+      return
+    }
     if (!input.grounded) {
       // Ignore the few frames of a step down a ledge; only a real drop is airborne.
       this.airTime += dt
@@ -117,6 +125,10 @@ class PlayerAnimator {
         this.writeLocomotion(t, input.speed)
         break
       }
+      case 'dance': {
+        this.writeDance(t, dt)
+        break
+      }
       case 'airborne': {
         const rising = clamp(input.verticalVelocity / ANIM.airborne.velocityReference, -1, 1)
         t.applyDefinition(ANIM.airborne.fall)
@@ -132,6 +144,27 @@ class PlayerAnimator {
         break
       }
     }
+  }
+
+  // Arms overhead in a V, pumping in alternation, knees and torso bouncing on the beat.
+  writeDance(out, dt) {
+    const D = ANIM.dance
+    this.danceTime += dt
+    const beat = this.danceTime * D.frequency * TAU
+    const pump = Math.sin(beat)
+    const hop = Math.abs(Math.sin(beat))
+    out.reset()
+    out.set('ArmL1', -D.armRaise + D.armPump * pump, 0, D.armSpread)
+    out.set('ArmR1', -D.armRaise - D.armPump * pump, 0, -D.armSpread)
+    out.set('ArmL2', D.elbowBend * (0.5 + 0.5 * pump))
+    out.set('ArmR2', D.elbowBend * (0.5 - 0.5 * pump))
+    out.set('LegL1', -D.kneeBend * 0.5 * hop)
+    out.set('LegR1', -D.kneeBend * 0.5 * hop)
+    out.set('LegL2', D.kneeBend * hop)
+    out.set('LegR2', D.kneeBend * hop)
+    out.set('Spine1', 0, D.twist * Math.sin(beat * 0.5), D.sway * Math.sin(beat * 0.5))
+    out.set('Neck1', 0, -D.twist * 0.5 * Math.sin(beat * 0.5), -D.sway * 0.5 * Math.sin(beat * 0.5))
+    out.bobY = D.bounce * (hop - 0.5)
   }
 
   // One cycle at two depths (walk -> run), derived from actual speed.

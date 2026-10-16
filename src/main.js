@@ -1,5 +1,5 @@
 import { Clock, PCFSoftShadowMap, PerspectiveCamera, Scene, SRGBColorSpace, Vector3, WebGLRenderer, Group, PointLight } from 'three'
-import { CAMERA, SNOW, SPAWN, SPAWN_FACING } from './config.js'
+import { ANIM, CAMERA, SNOW, SPAWN, SPAWN_FACING } from './config.js'
 import * as bloxity from './bloxity.js'
 import { inputState, install as installInput } from './input.js'
 import { player, resetPlayer, step as stepPlayer } from './player.js'
@@ -18,7 +18,9 @@ import { updateAuras } from './auras.js'
 import { buildAuraFx } from './auraFx.js'
 import { createFog, createGround, createLights, createSky } from './world.js'
 import { buildHub } from './hub.js'
+import { createBonfire } from './bonfire.js'
 import { buildProps } from './props.js'
+import { createFrostRealm } from './frostRealm.js'
 import { playerScreen } from './screenPos.js'
 import { createHud } from './hud.js'
 import { buildDefaultCharacter, loadBaseCharacter } from './avatar/character.js'
@@ -43,14 +45,14 @@ syncYawToPlayer()
 
 // --- Renderer / scene -------------------------------------------------------
 const GRAPHICS_PRESETS = {
-  Low: { shadows: false, antialias: false, dpr: 1, leaves: 0.4 },
-  Medium: { shadows: true, antialias: false, dpr: 1.5, leaves: 0.7 },
-  High: { shadows: true, antialias: true, dpr: 2, leaves: 1 },
-  Ultra: { shadows: true, antialias: true, dpr: 2, leaves: 1 },
+  Low: { shadows: false, antialias: false, dpr: 1, leaves: 0.4, fire: 0.4, fireLight: false },
+  Medium: { shadows: true, antialias: false, dpr: 1.5, leaves: 0.7, fire: 0.7, fireLight: true },
+  High: { shadows: true, antialias: true, dpr: 2, leaves: 1, fire: 1, fireLight: true },
+  Ultra: { shadows: true, antialias: true, dpr: 2, leaves: 1, fire: 1, fireLight: true },
 }
 const basePreset = GRAPHICS_PRESETS[bloxity.settings.graphics_quality] ?? GRAPHICS_PRESETS.High
 // Phones: no MSAA, capped pixel ratio and fewer leaves keep a steady frame rate.
-const preset = isTouch ? { ...basePreset, antialias: false, dpr: Math.min(basePreset.dpr, 1.5), leaves: Math.min(basePreset.leaves, 0.7) } : basePreset
+const preset = isTouch ? { ...basePreset, antialias: false, dpr: Math.min(basePreset.dpr, 1.5), leaves: Math.min(basePreset.leaves, 0.7), fire: Math.min(basePreset.fire, 0.5), fireLight: false } : basePreset
 
 const renderer = new WebGLRenderer({ antialias: preset.antialias, powerPreference: 'high-performance' })
 renderer.outputColorSpace = SRGBColorSpace
@@ -74,10 +76,12 @@ function resize() {
 window.addEventListener('resize', resize)
 resize()
 
-scene.add(createSky(), createGround())
+const sky = createSky()
+scene.add(sky, createGround())
 const lights = createLights()
 scene.add(lights.hemi, lights.sun, lights.sun.target)
-buildHub(scene)
+const hubRoot = buildHub(scene)
+const bonfire = createBonfire(scene, 36, 9, { fx: preset.fire, light: preset.fireLight })
 const props = buildProps(scene)
 const field = createDigField(scene, preset.leaves)
 const digSound = createDigSound()
@@ -96,7 +100,23 @@ for (const pile of props.piles) {
 }
 setPads(props.pads)
 const fallingLeaves = createSnowfall(scene, preset.leaves)
-const loot = createLoot(scene, field.piles)
+// The Frost Realm re-themes everything built so far (not the players or loot added below). Each
+// world starts with a fresh field: dug snow and loot left lying stay behind.
+const frostRealm = createFrostRealm({
+  scene,
+  roots: [...scene.children],
+  hubRoot,
+  stands: props.stands,
+  sky,
+  lights,
+  snowfall: fallingLeaves,
+  onSwitch() {
+    field.reset()
+    loot.reset()
+    hubTime = 0
+  },
+})
+const loot = createLoot(scene, field.piles, field.heightAt)
 field.onPileCleared(loot.spawnFor)
 field.onPileCleared(() => {
   state.leaves += SNOW.piles.leavesPerPile
@@ -211,9 +231,10 @@ renderer.setAnimationLoop(() => {
   // multiplier; elsewhere only a held blow trains.
   const pad = padAt()
   noticePad(pad)
-  const padTraining = !!pad && padUnlocked(pad)
+  const hasShovel = !!state.vacuum
+  const padTraining = hasShovel && !!pad && padUnlocked(pad)
   const padLocked = !!pad && !padTraining // a locked mound: clicking blows nothing
-  const blowing = padTraining || (inputState.blow && !padLocked)
+  const blowing = hasShovel && (padTraining || (inputState.blow && !padLocked))
   player.autoBlow = padTraining
 
   playerGroup.position.set(player.position.x, player.position.y, player.position.z)
@@ -229,13 +250,11 @@ renderer.setAnimationLoop(() => {
   shovel?.update(dt, animator)
   if (animator?.dig.impact) {
     animator.dig.impact = false
-    digSound.hit()
     if (field.spot) field.puff(field.spot.x, field.spot.z)
   }
-  if (animator?.dig.thrown) {
-    animator.dig.thrown = false
-    digSound.throw()
-  }
+  if (animator?.dig.thrown) animator.dig.thrown = false
+  const strokeS = ANIM.dig.cycle / Math.min(ANIM.dig.maxScale, 1 + Math.log10(Math.max(1, blowerPower())) * ANIM.dig.strengthLog)
+  digSound.update(dt, blowing && (padTraining || field.removing), strokeS, strokeS * (ANIM.dig.throwU - ANIM.dig.impactU))
   sendPose(player, Math.hypot(player.velocity.x, player.velocity.z), blowing ? 'blow' : '')
   remotes.update(dt, clock.elapsedTime, player.position)
   syncAura()
@@ -266,6 +285,8 @@ renderer.setAnimationLoop(() => {
 
   fallingLeaves.update(dt, clock.elapsedTime, player.position)
   props.update(dt, clock.elapsedTime)
+  frostRealm.update(clock.elapsedTime)
+  bonfire.update(clock.elapsedTime, player.position, renderer.domElement.height, camera.fov)
   updateCamera(camera, dt)
   chest.set(player.position.x, player.position.y + 1.1, player.position.z).project(camera)
   playerScreen.x = chest.x * 0.5 + 0.5

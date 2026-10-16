@@ -1,49 +1,110 @@
-// A training-zone snow pile: a lumpy dome covered in snow clumps. It never changes. While the player
-// digs at it (or stands on its pad), a few clumps lift off, fly and shrink away. dig.js / trainPads.js
-// drive it through `target.blow`; props.js calls `update` each frame.
+// A training-zone snow pile: a smooth, lumpy snow dome. It never changes. dig.js / trainPads.js drive it
+// through `target.blow`; props.js calls `update` each frame (nothing to animate now).
 import {
-  BufferAttribute, BufferGeometry, Color, DoubleSide, Group, InstancedMesh, Matrix4, Mesh,
-  MeshStandardMaterial, PlaneGeometry, Quaternion, Vector3,
+  BufferAttribute,
+  BufferGeometry,
+  CanvasTexture,
+  Color,
+  DoubleSide,
+  Float32BufferAttribute,
+  Group,
+  IcosahedronGeometry,
+  Mesh,
+  MeshStandardMaterial,
+  Points,
+  PointsMaterial,
+  RepeatWrapping,
 } from 'three'
 import { addPusher } from './colliders.js'
-import { snowTexture } from './snowTex.js'
 
-const LIFE = 1.0 // s a blown leaf lives
-const POOL = 90 // blown leaves alive at once
 const R = 1.55 // pile radius, m
 const HM = 1.3 // pile height, m
-const COUNT = 420
-const LEAF = [0.55, 0.95] // leaf size range, m
 
-let sharedTex = null
-const frac = (x) => x - Math.floor(x)
+// Fine snow-grain bump shared by every pile (built once, lazily).
+let grainTex = null
+function grainTexture() {
+  if (grainTex) return grainTex
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')
+  g.fillStyle = '#808080'
+  g.fillRect(0, 0, 128, 128)
+  for (let i = 0; i < 2600; i++) {
+    const v = 90 + Math.random() * 110
+    g.fillStyle = `rgb(${v},${v},${v})`
+    const r = 0.6 + Math.random() * 1.4
+    g.beginPath()
+    g.arc(Math.random() * 128, Math.random() * 128, r, 0, Math.PI * 2)
+    g.fill()
+  }
+  grainTex = new CanvasTexture(c)
+  grainTex.wrapS = grainTex.wrapT = RepeatWrapping
+  return grainTex
+}
 
 export function createTrainingPile({ x, y, z, color, lava = false, seed = 1, floorAt = () => y, hp = 1 }) {
-  sharedTex ??= snowTexture()
   const group = new Group()
   const rnd = (() => {
     let s = Math.floor(seed * 9301 + 49297) % 233280 || 1
     return () => ((s = (s * 16807) % 2147483647) / 2147483647)
   })()
   const lump = rnd() * 6
+  const windDir = rnd() * Math.PI * 2 // the drift is stretched/skewed along this direction
+  const off = rnd() * 100
+
+  // Seeded 2D value noise + fbm: gives the heap its wind-blown, clumpy surface.
+  const hash = (i, j) => {
+    const v = Math.sin((i + off) * 127.1 + (j + off) * 311.7) * 43758.5453
+    return v - Math.floor(v)
+  }
+  const vnoise = (px, pz) => {
+    const i = Math.floor(px)
+    const j = Math.floor(pz)
+    const fx = px - i
+    const fz = pz - j
+    const u = fx * fx * (3 - 2 * fx)
+    const w = fz * fz * (3 - 2 * fz)
+    return (
+      hash(i, j) * (1 - u) * (1 - w) + hash(i + 1, j) * u * (1 - w) + hash(i, j + 1) * (1 - u) * w + hash(i + 1, j + 1) * u * w
+    )
+  }
+  const fbm = (px, pz) => vnoise(px, pz) * 0.55 + vnoise(px * 2.1, pz * 2.1) * 0.3 + vnoise(px * 4.3, pz * 4.3) * 0.15
+
+  const cw = Math.cos(windDir)
+  const sw = Math.sin(windDir)
   const height = (px, pz) => {
-    const r2 = (px * px + pz * pz) / (R * R)
-    if (r2 >= 1) return 0
+    // stretch along the wind so it reads as a drift, not a perfect cone
+    const al = px * cw + pz * sw
+    const cr = -px * sw + pz * cw
+    const ex = al / (R * 1.12)
+    const ez = cr / (R * 0.9)
     const th = Math.atan2(pz, px)
-    const bump = 1 + 0.1 * Math.sin(3 * th + lump) + 0.07 * Math.sin(5 * th + lump * 2)
-    return HM * Math.pow(1 - r2, 0.6) * bump
+    // irregular outline
+    const edge = 1 + 0.12 * (fbm(px * 1.3 + 5, pz * 1.3 + 5) - 0.5) * 2 + 0.05 * Math.sin(4 * th + lump)
+    const r2 = (ex * ex + ez * ez) / (edge * edge)
+    if (r2 >= 1) return 0
+    // steeper shoulders than a plain dome, a slightly lopsided summit
+    const base = HM * Math.pow(1 - r2, 0.75) * (1 + 0.18 * (al / R))
+    const clump = (fbm(px * 2.2, pz * 2.2) - 0.5) * 0.34 // lumpy mounds
+    const ripple = Math.sin((cr * 7 + fbm(px * 3, pz * 3) * 3) * 1.0) * 0.018 // wind ripples
+    const fade = Math.min(1, (1 - r2) * 4) // keep the rim glued to the ground
+    return Math.max(0, base + (clump + ripple) * fade * (0.4 + base / HM))
   }
 
-  // --- Core: a lumpy dome under the leaves.
-  const rings = 9
-  const segs = 28
+  const rings = 30
+  const segs = 72
   const verts = []
+  const uvs = []
   const idx = []
   for (let r = 0; r <= rings; r++) {
     for (let s = 0; s < segs; s++) {
       const a = (s / segs) * Math.PI * 2
-      const rr = (r / rings) * R * 0.99
-      verts.push(Math.cos(a) * rr, height(Math.cos(a) * rr, Math.sin(a) * rr) * 0.96, Math.sin(a) * rr)
+      // ease radius so the dense rings sit near the rim where the slope is steepest
+      const rr = Math.pow(r / rings, 0.85) * R * 1.2
+      const px = Math.cos(a) * rr
+      const pz = Math.sin(a) * rr
+      verts.push(px, height(px, pz), pz)
+      uvs.push(px * 1.6, pz * 1.6)
     }
   }
   for (let r = 0; r < rings; r++) {
@@ -55,107 +116,88 @@ export function createTrainingPile({ x, y, z, color, lava = false, seed = 1, flo
   }
   const coreGeo = new BufferGeometry()
   coreGeo.setAttribute('position', new BufferAttribute(new Float32Array(verts), 3))
+  coreGeo.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
   coreGeo.setIndex(idx)
   coreGeo.computeVertexNormals()
-  const base = new Color(color)
+
+  // Baked shading: bright sunlit crowns, cool blue-grey hollows and steep flanks.
+  const pos = coreGeo.attributes.position
+  const nor = coreGeo.attributes.normal
+  const cols = new Float32Array(pos.count * 3)
+  for (let i = 0; i < pos.count; i++) {
+    const h = pos.getY(i) / HM
+    const flat = Math.max(0, nor.getY(i))
+    const ao = Math.min(1, 0.55 + h * 0.5 + flat * 0.35)
+    const k = 0.78 + 0.22 * ao
+    cols[i * 3] = k * (0.93 + 0.07 * ao)
+    cols[i * 3 + 1] = k * (0.96 + 0.04 * ao)
+    cols[i * 3 + 2] = Math.min(1, k * 1.04 + 0.04 * (1 - ao))
+  }
+  coreGeo.setAttribute('color', new BufferAttribute(cols, 3))
+
+  // The colour is the matching snow-field zone's palette tint.
+  const grain = grainTexture()
   const coreMat = new MeshStandardMaterial({
-    color: base.clone().multiplyScalar(0.5),
-    flatShading: true,
-    roughness: 0.9,
+    color: new Color(color),
+    vertexColors: true,
+    roughness: 0.95,
+    metalness: 0,
+    bumpMap: grain,
+    bumpScale: 1.4,
     side: DoubleSide,
     ...(lava ? { emissive: '#ff3a00', emissiveIntensity: 0.3 } : {}),
   })
   const core = new Mesh(coreGeo, coreMat)
-  core.position.y = 0.12
+  core.position.y = 0.05
   group.add(core)
 
-  // --- Pile leaves (fixed) and the pool of blown leaves.
-  const leafMat = new MeshStandardMaterial({
-    map: sharedTex,
-    alphaTest: 0.45,
-    side: DoubleSide,
-    roughness: 0.9,
-    ...(lava ? { emissive: '#ff3a00', emissiveIntensity: 0.4 } : {}),
-  })
-  const inst = new InstancedMesh(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), leafMat, COUNT + POOL)
-  inst.frustumCulled = false
-  inst.position.y = 0.12
-  group.add(inst)
-
-  const up = new Vector3(0, 1, 0)
-  const nrm = new Vector3()
-  const pos = new Vector3()
-  const scl = new Vector3()
-  const q = new Quaternion()
-  const m4 = new Matrix4()
-  const tint = new Color()
-  const hsl = {}
-  const hide = new Matrix4().makeScale(0, 0, 0)
-  const spots = [] // where leaves sit on the pile: [x, y, z]
-  for (let i = 0; i < COUNT; i++) {
+  // Loose snow chunks and clods resting around the base and on the flanks.
+  const clodGeo = new IcosahedronGeometry(1, 1)
+  const cp = clodGeo.attributes.position
+  for (let i = 0; i < cp.count; i++) {
+    const f = 0.8 + 0.4 * hash(Math.round(cp.getX(i) * 9), Math.round(cp.getZ(i) * 9) + i * 0.01)
+    cp.setXYZ(i, cp.getX(i) * f, cp.getY(i) * f * 0.7, cp.getZ(i) * f)
+  }
+  clodGeo.computeVertexNormals()
+  const clodMat = new MeshStandardMaterial({ color: new Color(color), roughness: 0.95, bumpMap: grain, bumpScale: 1.2 })
+  for (let i = 0; i < 14; i++) {
     const a = rnd() * Math.PI * 2
-    const r = R * Math.sqrt(rnd()) * 0.98
-    const px = Math.cos(a) * r
-    const pz = Math.sin(a) * r
-    const py = height(px, pz) + 0.03 + rnd() * 0.08
-    spots.push([px, py, pz])
-    const e = 0.05
-    nrm.set(height(px - e, pz) - height(px + e, pz), 2 * e, height(px, pz - e) - height(px, pz + e)).normalize()
-    q.setFromUnitVectors(up, nrm).multiply(new Quaternion().setFromAxisAngle(up, rnd() * Math.PI * 2))
-    const sz = LEAF[0] + (LEAF[1] - LEAF[0]) * rnd()
-    m4.compose(pos.set(px, py, pz), q, scl.set(sz, sz, sz))
-    inst.setMatrixAt(i, m4)
-    color_(i)
+    const d = R * (0.55 + rnd() * 0.65)
+    const px = Math.cos(a) * d
+    const pz = Math.sin(a) * d
+    const hh = height(px, pz)
+    const sc = 0.07 + rnd() * 0.13
+    const m = new Mesh(clodGeo, clodMat)
+    m.scale.set(sc * (1 + rnd() * 0.5), sc, sc * (1 + rnd() * 0.5))
+    m.position.set(px, 0.05 + hh + sc * 0.15, pz)
+    m.rotation.set(rnd() * 3, rnd() * 6, rnd() * 3)
+    group.add(m)
   }
-  function color_(i) {
-    base.getHSL(hsl)
-    tint.setHSL(frac(hsl.h + (rnd() - 0.5) * 0.06), hsl.s, Math.min(0.9, Math.max(0.1, hsl.l * (0.75 + rnd() * 0.5))))
-    inst.setColorAt(i, tint)
-  }
-  const fly = [] // blown leaves: position, velocity, age, size, spin
-  for (let j = 0; j < POOL; j++) {
-    fly.push({ on: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, age: 0, size: 0.7, spin: 0 })
-    color_(COUNT + j)
-    inst.setMatrixAt(COUNT + j, hide)
-  }
-  inst.instanceMatrix.needsUpdate = true
-  inst.instanceColor.needsUpdate = true
 
-  let owed = 0
-  let wind = [1, 0] // unit heading of the airflow over the pile
-  let active = false
+  // Glittering ice crystals scattered over the surface.
+  const sp = []
+  for (let i = 0; i < 170; i++) {
+    const a = rnd() * Math.PI * 2
+    const d = Math.sqrt(rnd()) * R * 0.95
+    const px = Math.cos(a) * d
+    const pz = Math.sin(a) * d
+    const hh = height(px, pz)
+    if (hh > 0.04) sp.push(px, 0.06 + hh, pz)
+  }
+  const sparkGeo = new BufferGeometry()
+  sparkGeo.setAttribute('position', new Float32BufferAttribute(sp, 3))
+  const sparkles = new Points(
+    sparkGeo,
+    new PointsMaterial({ color: '#ffffff', size: 0.035, sizeAttenuation: true, transparent: true, opacity: 0.9, depthWrite: false }),
+  )
+  group.add(sparkles)
 
   const target = {
     x,
     y: y + 0.7,
     z,
     radius: R,
-    // w: airflow strength 0..1 at the pile; (wx, wz): its heading; bp: blower power.
-    blow(w, wx, wz, dt, bp) {
-      if (w <= 0) return
-      const hl = Math.hypot(wx, wz)
-      if (hl > 1e-3) wind = [wx / hl, wz / hl]
-      owed += (60 + 80 * w) * dt
-      while (owed >= 1) {
-        owed -= 1
-        const f = fly.find((l) => !l.on)
-        if (!f) break
-        const sp = spots[Math.floor(Math.random() * COUNT)]
-        const v = 7 + Math.random() * 6
-        const ang = (Math.random() - 0.5) * 0.7
-        const c = Math.cos(ang)
-        const sn = Math.sin(ang)
-        f.on = true
-        f.age = 0
-        f.x = sp[0]; f.y = sp[1]; f.z = sp[2]
-        f.vx = (wind[0] * c - wind[1] * sn) * v
-        f.vz = (wind[0] * sn + wind[1] * c) * v
-        f.vy = 2 + Math.random() * 3
-        f.size = LEAF[0] + (LEAF[1] - LEAF[0]) * Math.random()
-        f.spin = Math.random() * 10
-      }
-      active = true
-    },
+    blow() {},
   }
 
   addPusher((p, radius) => {
@@ -170,39 +212,5 @@ export function createTrainingPile({ x, y, z, color, lava = false, seed = 1, flo
     } else p.x += lim
   })
 
-  const spinQ = new Quaternion()
-  return {
-    group,
-    target,
-    leafMat,
-    coreMat,
-    update(dt) {
-      if (!active) return
-      let any = false
-      for (let j = 0; j < POOL; j++) {
-        const f = fly[j]
-        if (!f.on) continue
-        f.age += dt
-        if (f.age >= LIFE) {
-          f.on = false
-          inst.setMatrixAt(COUNT + j, hide)
-          continue
-        }
-        any = true
-        const k = Math.exp(-1.2 * dt)
-        f.vx *= k; f.vz *= k
-        f.vy -= 6 * dt
-        f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt
-        const t = f.age / LIFE
-        const sz = f.size * (1 - t * t)
-        q.setFromAxisAngle(up, f.spin + f.age * 8)
-        spinQ.setFromAxisAngle(nrm.set(1, 0, 0), Math.sin(f.age * 6 + f.spin))
-        q.multiply(spinQ)
-        m4.compose(pos.set(f.x, f.y, f.z), q, scl.set(sz, sz, sz))
-        inst.setMatrixAt(COUNT + j, m4)
-      }
-      inst.instanceMatrix.needsUpdate = true
-      if (!any) active = false
-    },
-  }
+  return { group, target, coreMat, update() {} }
 }

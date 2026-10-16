@@ -1,1421 +1,69 @@
-import { DoubleSide, Quaternion, Vector2, Vector3 } from 'three'
-import { h as __h, Fragment, useRef, useFrame, plastic, canvasTexture } from './r3f.js'
+import { DoubleSide, Vector2 } from 'three'
+import { h as __h, Fragment, useRef, useFrame, plastic } from './r3f.js'
 
-// 3D models for every loot item, ported from Lift-rock-for-treasure
-// (components/world/LootItems.jsx). Each rests on y=0 and is 0.6-1.2 m across.
-// MODELS maps item name -> component; rarity colours live in data/loot.js.
+// 3D models for every snow-themed loot item (procedural three.js primitives).
+// Each rests on y=0 and is 0.6-1.2 m across. MODELS maps item name -> component;
+// names, rarity and values live in data/loot.js.
 
-const UP = new Vector3(0, 1, 0)
+// ---- Materials ----
 
-// Flattened blob stuck to the surface of a sphere of radius `r`, facing
-// outward along `dir`. Used for coal patches and mushroom spots.
-function Spot({ dir, r, size, mat, flat = 0.35, sx = 1 }) {
-  const n = new Vector3(...dir).normalize()
-  const q = new Quaternion().setFromUnitVectors(UP, n)
-  const p = n.clone().multiplyScalar(r)
-  return (
-    <mesh position={p.toArray()} quaternion={q} scale={[sx, flat, 1]} material={mat}>
-      <sphereGeometry args={[size, 12, 8]} />
-    </mesh>
-  )
-}
-
-const COAL_PATCHES = [
-  { dir: [0.6, 0.55, 0.6], size: 0.2, sx: 1.2 },
-  { dir: [-0.7, 0.4, 0.5], size: 0.17 },
-  { dir: [0.1, 0.95, -0.2], size: 0.16 },
-  { dir: [-0.3, 0.3, -0.9], size: 0.22, sx: 1.3 },
-  { dir: [0.9, 0.25, -0.35], size: 0.14 },
-  { dir: [-0.15, 0.1, 1], size: 0.13 },
-  { dir: [0.35, 0.9, 0.35], size: 0.11 },
-]
-
-function Coal() {
-  const rock = plastic('#b4b6c6', { flatShading: true })
-  const rock2 = plastic('#a3a5b6', { flatShading: true })
-  const black = plastic('#0d0d12', { roughness: 0.4 })
-  const shine = plastic('#e8eaf4', { flatShading: true })
-  return (
-    <group position={[0, 0.42, 0]}>
-      <mesh scale={[1.05, 0.82, 0.92]} material={rock}>
-        <icosahedronGeometry args={[0.55, 1]} />
-      </mesh>
-      <mesh position={[-0.38, -0.12, 0.2]} scale={[1, 0.8, 1]} material={rock2}>
-        <dodecahedronGeometry args={[0.3, 0]} />
-      </mesh>
-      <mesh position={[0.35, -0.15, 0.28]} material={rock2}>
-        <dodecahedronGeometry args={[0.24, 0]} />
-      </mesh>
-      <mesh position={[0.05, 0.38, -0.15]} rotation={[0.4, 0.8, 0]} material={shine}>
-        <dodecahedronGeometry args={[0.2, 0]} />
-      </mesh>
-      {COAL_PATCHES.map((p, i) => (
-        <Spot key={i} r={0.5} mat={black} {...p} />
-      ))}
-    </group>
-  )
-}
-
-function Rock() {
-  const stone = plastic('#8f8d88', { flatShading: true })
-  const dark = plastic('#76746f', { flatShading: true })
-  const light = plastic('#aaa8a1', { flatShading: true })
-  return (
-    <group position={[0, 0.34, 0]} rotation-y={0.5}>
-      <mesh scale={[1.15, 0.7, 0.9]} material={stone}>
-        <dodecahedronGeometry args={[0.5, 0]} />
-      </mesh>
-      <mesh position={[-0.42, -0.14, 0.22]} scale={[1, 0.75, 1]} material={dark}>
-        <dodecahedronGeometry args={[0.24, 0]} />
-      </mesh>
-      <mesh position={[0.4, -0.16, 0.2]} material={dark}>
-        <dodecahedronGeometry args={[0.18, 0]} />
-      </mesh>
-      <mesh position={[0.05, 0.28, -0.12]} rotation={[0.4, 0.7, 0]} material={light}>
-        <dodecahedronGeometry args={[0.17, 0]} />
-      </mesh>
-    </group>
-  )
-}
-
-function Bone() {
-  const bone = plastic('#f4f1e4')
-  const shade = plastic('#d9d4bf')
-  return (
-    <group position={[0, 0.17, 0]} rotation-y={0.6}>
-      <mesh rotation-z={Math.PI / 2} material={bone}>
-        <cylinderGeometry args={[0.09, 0.09, 1.1, 12]} />
-      </mesh>
-      {/* Thicker middle ridge, darker flared necks and the paired knobs. */}
-      <mesh rotation-z={Math.PI / 2} material={shade}>
-        <cylinderGeometry args={[0.1, 0.1, 0.5, 12]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * 0.58, 0, 0]}>
-          <mesh position={[-s * 0.1, 0, 0]} rotation-z={(s * Math.PI) / 2} material={bone}>
-            <coneGeometry args={[0.16, 0.22, 12]} />
-          </mesh>
-          {[-1, 1].map((t) => (
-            <mesh key={t} position={[s * 0.04, 0.02, t * 0.13]} material={bone}>
-              <sphereGeometry args={[0.15, 14, 10]} />
-            </mesh>
-          ))}
-        </group>
-      ))}
-    </group>
-  )
-}
-
-function Skull() {
-  const bone = plastic('#e4f1cb')
-  const shade = plastic('#c4d3a8')
-  const dark = plastic('#101216', { roughness: 0.5 })
-  return (
-    <group position={[0, 0.02, 0]} rotation-y={0.2}>
-      <mesh position={[0, 0.62, 0]} scale={[1, 0.95, 1.08]} material={bone}>
-        <sphereGeometry args={[0.45, 22, 16]} />
-      </mesh>
-      {/* Cheekbones and upper jaw */}
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.3, 0.42, 0.25]} material={bone}>
-          <sphereGeometry args={[0.14, 12, 10]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.33, 0.2]} material={bone}>
-        <boxGeometry args={[0.48, 0.2, 0.36]} />
-      </mesh>
-      {/* Eye sockets with a shaded rim */}
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * 0.19, 0.58, 0.38]}>
-          <mesh material={shade}>
-            <sphereGeometry args={[0.15, 14, 10]} />
-          </mesh>
-          <mesh position={[0, 0, 0.04]} material={dark}>
-            <sphereGeometry args={[0.12, 14, 10]} />
-          </mesh>
-        </group>
-      ))}
-      {/* Nose cavity */}
-      <mesh position={[0, 0.42, 0.44]} rotation-x={Math.PI / 2 + 0.2} material={dark}>
-        <coneGeometry args={[0.07, 0.14, 3]} />
-      </mesh>
-      {/* Upper teeth */}
-      {[-0.17, -0.085, 0, 0.085, 0.17].map((x) => (
-        <mesh key={x} position={[x, 0.2, 0.36]} material={plastic('#fbfff0')}>
-          <boxGeometry args={[0.07, 0.1, 0.06]} />
-        </mesh>
-      ))}
-      {/* Lower jaw */}
-      <mesh position={[0, 0.1, 0.17]} material={bone}>
-        <boxGeometry args={[0.4, 0.16, 0.3]} />
-      </mesh>
-      {[-0.14, -0.07, 0, 0.07, 0.14].map((x) => (
-        <mesh key={x} position={[x, 0.2, 0.3]} material={plastic('#fbfff0')}>
-          <boxGeometry args={[0.06, 0.08, 0.05]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-const MUSHROOM_SPOTS = [
-  { dir: [0, 1, 0], size: 0.15 },
-  { dir: [0.75, 0.65, 0.25], size: 0.12 },
-  { dir: [-0.7, 0.6, 0.45], size: 0.13 },
-  { dir: [0.15, 0.6, -0.85], size: 0.12 },
-  { dir: [0.55, 0.45, -0.7], size: 0.09 },
-  { dir: [-0.5, 0.5, -0.7], size: 0.1 },
-  { dir: [0.35, 0.8, 0.5], size: 0.08 },
-]
-
-function Mushroom() {
-  const cap = plastic('#e51c28', { roughness: 0.55 })
-  const white = plastic('#fffdf5')
-  const cream = plastic('#f1dfbf')
-  return (
-    <group scale={1.1}>
-      {/* Stem: flared foot, tapered neck, ring skirt */}
-      <mesh position={[0, 0.07, 0]} material={cream}>
-        <cylinderGeometry args={[0.2, 0.3, 0.14, 16]} />
-      </mesh>
-      <mesh position={[0, 0.3, 0]} material={cream}>
-        <cylinderGeometry args={[0.15, 0.2, 0.34, 16]} />
-      </mesh>
-      <mesh position={[0, 0.34, 0]} material={white}>
-        <cylinderGeometry args={[0.24, 0.17, 0.07, 16]} />
-      </mesh>
-      {/* Gills under the cap */}
-      <mesh position={[0, 0.47, 0]} rotation-x={Math.PI} material={plastic('#d9c298')}>
-        <circleGeometry args={[0.5, 24]} />
-      </mesh>
-      {/* Cap dome */}
-      <group position={[0, 0.47, 0]}>
-        <mesh scale={[1, 0.85, 1]} material={cap}>
-          <sphereGeometry args={[0.52, 28, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        </mesh>
-        <mesh position={[0, 0.02, 0]} rotation-x={Math.PI / 2} material={cap}>
-          <torusGeometry args={[0.5, 0.03, 8, 28]} />
-        </mesh>
-        <group scale={[1, 0.85, 1]}>
-          {MUSHROOM_SPOTS.map((s, i) => (
-            <Spot key={i} r={0.525} mat={white} flat={0.3} {...s} />
-          ))}
-        </group>
-      </group>
-    </group>
-  )
-}
-
-function Anchor() {
-  const steel = plastic('#7f95ab', { roughness: 0.35, metalness: 0.45 })
-  const dark = plastic('#566b80', { roughness: 0.4, metalness: 0.45 })
-  const rope = plastic('#c9a15a')
-  return (
-    <group position={[0, 0.1, 0]} rotation-y={0.4}>
-      {/* Shank */}
-      <mesh position={[0, 0.78, 0]} material={steel}>
-        <cylinderGeometry args={[0.065, 0.085, 1.3, 10]} />
-      </mesh>
-      {/* Ring at the top with a rope loop through it */}
-      <mesh position={[0, 1.55, 0]} material={steel}>
-        <torusGeometry args={[0.13, 0.04, 8, 16]} />
-      </mesh>
-      <mesh position={[0.02, 1.7, 0]} rotation-y={Math.PI / 2} material={rope}>
-        <torusGeometry args={[0.1, 0.03, 8, 14]} />
-      </mesh>
-      {/* Stock: crossbar with ball ends and a collar */}
-      <mesh position={[0, 1.2, 0]} rotation-z={Math.PI / 2} material={dark}>
-        <cylinderGeometry args={[0.05, 0.05, 0.75, 10]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.38, 1.2, 0]} material={dark}>
-          <sphereGeometry args={[0.08, 10, 8]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 1.2, 0]} material={steel}>
-        <sphereGeometry args={[0.11, 12, 10]} />
-      </mesh>
-      {/* Crown arc */}
-      <mesh position={[0, 0.5, 0]} rotation-z={Math.PI} material={steel}>
-        <torusGeometry args={[0.5, 0.07, 10, 28, Math.PI]} />
-      </mesh>
-      {/* Flukes: pointed palms at each arm tip */}
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * 0.5, 0.52, 0]} rotation-z={-s * 0.55}>
-          <mesh position={[0, 0.02, 0]} scale={[1, 1, 0.45]} material={dark}>
-            <coneGeometry args={[0.2, 0.36, 3]} />
-          </mesh>
-        </group>
-      ))}
-      {/* Ground contact: crown bulge */}
-      <mesh position={[0, 0.0, 0]} material={steel}>
-        <sphereGeometry args={[0.09, 10, 8]} />
-      </mesh>
-    </group>
-  )
-}
-
-function Gem() {
-  const glass = { emissive: '#00b8d9', emissiveIntensity: 0.45, roughness: 0.15, metalness: 0.1, flatShading: true }
-  const body = plastic('#19e0ff', glass)
-  const light = plastic('#8ff3ff', { ...glass, emissiveIntensity: 0.7 })
-  return (
-    <group position={[0, 0.02, 0]} rotation-y={0.5}>
-      {/* Pavilion (point down), girdle, crown and flat table */}
-      <mesh position={[0, 0.3, 0]} rotation-x={Math.PI} material={body}>
-        <cylinderGeometry args={[0.55, 0.04, 0.6, 8]} />
-      </mesh>
-      <mesh position={[0, 0.66, 0]} material={body}>
-        <cylinderGeometry args={[0.55, 0.55, 0.12, 8]} />
-      </mesh>
-      <mesh position={[0, 0.86, 0]} material={light}>
-        <cylinderGeometry args={[0.3, 0.55, 0.28, 8]} />
-      </mesh>
-      <mesh position={[0, 1.0, 0]} rotation-x={-Math.PI / 2} material={plastic('#d5fbff', { emissive: '#7fe9ff', emissiveIntensity: 0.8 })}>
-        <circleGeometry args={[0.3, 8]} />
-      </mesh>
-      {/* Small loose shards */}
-      {[
-        [0.75, 0.12, 0.3, 0.8],
-        [-0.7, 0.1, -0.35, -0.6],
-        [0.55, 0.09, -0.6, 0.3],
-      ].map(([x, y, z, r], i) => (
-        <mesh key={i} position={[x, y, z]} rotation={[0.5, r, 0.4]} material={body}>
-          <octahedronGeometry args={[0.11 - i * 0.015, 0]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-const BEAD_COLORS = ['#e8941f', '#7a3d12', '#d9b050', '#b5561c', '#4a2a14']
-const BEADS = 22
-function Bracelet() {
-  return (
-    <group position={[0, 0.1, 0]}>
-      <mesh rotation-x={Math.PI / 2} material={plastic('#2a1a10')}>
-        <torusGeometry args={[0.5, 0.025, 6, 32]} />
-      </mesh>
-      {Array.from({ length: BEADS }, (_, i) => {
-        const a = (i / BEADS) * Math.PI * 2
-        const big = i % 5 === 0
-        const r = big ? 0.13 : 0.085 + 0.02 * Math.sin(i * 2.3)
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.5, big ? 0.03 : 0, Math.sin(a) * 0.5]} scale={[1, 0.9, 1]} material={plastic(big ? '#d83a2a' : BEAD_COLORS[i % BEAD_COLORS.length], { roughness: 0.45 })}>
-            <sphereGeometry args={[r, 14, 10]} />
-          </mesh>
-        )
-      })}
-    </group>
-  )
-}
-
-function Coin() {
-  const gold = plastic('#ffc61a', { roughness: 0.3, metalness: 0.5 })
-  const deep = plastic('#e29a0b', { roughness: 0.35, metalness: 0.5 })
-  return (
-    <group position={[0, 0.5, 0]} rotation-x={Math.PI / 2}>
-      <mesh material={gold}>
-        <cylinderGeometry args={[0.46, 0.46, 0.09, 28]} />
-      </mesh>
-      {/* Raised rim, recessed face and a star on each side */}
-      <mesh material={deep}>
-        <torusGeometry args={[0.46, 0.04, 8, 28]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <group key={s} position={[0, s * 0.047, 0]} rotation-x={s * Math.PI / 2}>
-          <mesh material={deep}>
-            <circleGeometry args={[0.36, 24]} />
-          </mesh>
-          <mesh position={[0, 0, 0.005]} rotation-z={Math.PI / 2} material={gold}>
-            <cylinderGeometry args={[0.2, 0.2, 0.01, 5]} />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  )
-}
-
-const BELL_PROFILE = [
-  [0, 0.78], [0.1, 0.77], [0.18, 0.7], [0.24, 0.56], [0.29, 0.4], [0.34, 0.26], [0.42, 0.14], [0.52, 0.02],
-].map(([r, y]) => new Vector2(r, y))
-
-function BrassBell() {
-  const brass = plastic('#f2b81c', { roughness: 0.28, metalness: 0.6, side: DoubleSide })
-  const dark = plastic('#b9810f', { roughness: 0.35, metalness: 0.6 })
-  return (
-    <group position={[0, 0.05, 0]}>
-      <mesh material={brass}>
-        <latheGeometry args={[BELL_PROFILE, 28]} />
-      </mesh>
-      {/* Flared lip, shoulder band, crown loop and clapper */}
-      <mesh position={[0, 0.03, 0]} rotation-x={Math.PI / 2} material={dark}>
-        <torusGeometry args={[0.51, 0.04, 8, 28]} />
-      </mesh>
-      <mesh position={[0, 0.5, 0]} rotation-x={Math.PI / 2} material={dark}>
-        <torusGeometry args={[0.26, 0.025, 8, 24]} />
-      </mesh>
-      <mesh position={[0, 0.9, 0]} material={dark}>
-        <torusGeometry args={[0.09, 0.03, 8, 16]} />
-      </mesh>
-      <mesh position={[0, 0.0, 0]} material={dark}>
-        <sphereGeometry args={[0.11, 12, 10]} />
-      </mesh>
-    </group>
-  )
-}
-
-function Binoculars() {
-  const body = plastic('#324f9a', { roughness: 0.5 })
-  const dark = plastic('#17254a', { roughness: 0.45 })
-  const lens = plastic('#7fd6ff', { emissive: '#2a8fd0', emissiveIntensity: 0.5, roughness: 0.1, metalness: 0.2 })
-  return (
-    <group position={[0, 0.32, 0]} rotation-y={0.3}>
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * 0.24, 0, 0]}>
-          {/* Barrel along Z: objective bell at the front, eyepiece at the back */}
-          <mesh rotation-x={Math.PI / 2} material={body}>
-            <cylinderGeometry args={[0.15, 0.17, 0.8, 16]} />
-          </mesh>
-          <mesh position={[0, 0, 0.5]} rotation-x={Math.PI / 2} material={body}>
-            <cylinderGeometry args={[0.24, 0.17, 0.26, 16]} />
-          </mesh>
-          <mesh position={[0, 0, 0.64]} rotation-x={Math.PI / 2} material={dark}>
-            <cylinderGeometry args={[0.25, 0.25, 0.04, 16]} />
-          </mesh>
-          <mesh position={[0, 0, 0.665]} rotation-x={Math.PI / 2} material={lens}>
-            <cylinderGeometry args={[0.2, 0.2, 0.02, 16]} />
-          </mesh>
-          <mesh position={[0, 0, -0.48]} rotation-x={Math.PI / 2} material={dark}>
-            <cylinderGeometry args={[0.13, 0.15, 0.18, 14]} />
-          </mesh>
-          <mesh position={[0, 0.17, 0.1]} material={dark}>
-            <boxGeometry args={[0.12, 0.05, 0.2]} />
-          </mesh>
-        </group>
-      ))}
-      {/* Hinge bridge and focus wheel */}
-      <mesh position={[0, 0, 0.05]} material={dark}>
-        <boxGeometry args={[0.3, 0.1, 0.34]} />
-      </mesh>
-      <mesh position={[0, 0.07, 0.05]} rotation-z={Math.PI / 2} material={body}>
-        <cylinderGeometry args={[0.07, 0.07, 0.16, 12]} />
-      </mesh>
-    </group>
-  )
-}
-
-function IronBar() {
-  const iron = plastic('#eceff5', { roughness: 0.4, metalness: 0.35 })
-  const shade = plastic('#c7ccd8', { roughness: 0.45, metalness: 0.35 })
-  return (
-    <group position={[0, 0.2, 0]} rotation-y={0.5}>
-      <mesh material={iron}>
-        <boxGeometry args={[0.46, 0.3, 1.2]} />
-      </mesh>
-      {/* Bevelled top and end caps, stamped groove along the top */}
-      <mesh position={[0, 0.17, 0]} material={shade}>
-        <boxGeometry args={[0.34, 0.06, 1.08]} />
-      </mesh>
-      <mesh position={[0, 0.205, 0]} material={iron}>
-        <boxGeometry args={[0.1, 0.02, 0.8]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[0, 0, s * 0.61]} material={shade}>
-          <boxGeometry args={[0.4, 0.24, 0.04]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function PirateHat() {
-  const felt = plastic('#14151a', { roughness: 0.8 })
-  const trim = plastic('#d7a62b', { roughness: 0.35, metalness: 0.5 })
-  const white = plastic('#f6f4ea')
-  return (
-    <group position={[0, 0.3, 0]} rotation-x={-0.15}>
-      {/* Wide brim and domed crown */}
-      <mesh scale={[1.15, 0.2, 0.8]} material={felt}>
-        <sphereGeometry args={[0.55, 24, 12]} />
-      </mesh>
-      <mesh position={[0, 0.12, 0]} scale={[1, 0.8, 0.8]} material={felt}>
-        <sphereGeometry args={[0.4, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      {/* Brim turned up on both sides */}
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.5, 0.1, 0]} rotation-z={-s * 0.6} scale={[0.5, 0.14, 0.72]} material={felt}>
-          <sphereGeometry args={[0.4, 16, 10]} />
-        </mesh>
-      ))}
-      {/* Gold edge trim */}
-      <mesh position={[0, 0.02, 0]} rotation-x={Math.PI / 2} scale={[1.1, 0.78, 1]} material={trim}>
-        <torusGeometry args={[0.56, 0.018, 6, 40]} />
-      </mesh>
-      {/* Skull and crossbones on the front */}
-      <group position={[0, 0.14, 0.34]} rotation-x={0.35}>
-        <mesh material={white}>
-          <sphereGeometry args={[0.1, 12, 10]} />
-        </mesh>
-        <mesh position={[0, -0.09, 0]} material={white}>
-          <boxGeometry args={[0.09, 0.06, 0.07]} />
-        </mesh>
-        {[-1, 1].map((s) => (
-          <mesh key={s} position={[0, -0.14, -0.01]} rotation-z={s * 0.7} material={white}>
-            <boxGeometry args={[0.3, 0.035, 0.03]} />
-          </mesh>
-        ))}
-        {[-1, 1].map((s) => (
-          <mesh key={s} position={[s * 0.04, 0.01, 0.085]} material={felt}>
-            <sphereGeometry args={[0.025, 8, 6]} />
-          </mesh>
-        ))}
-      </group>
-    </group>
-  )
-}
-
-function Anvil() {
-  const iron = plastic('#7d8593', { roughness: 0.4, metalness: 0.6 })
-  const dark = plastic('#565c68', { roughness: 0.45, metalness: 0.6 })
-  const face = plastic('#a9b0bd', { roughness: 0.3, metalness: 0.6 })
-  return (
-    <group position={[0, 0, 0]} rotation-y={0.4}>
-      {/* Foot, waist, hardy block, working face, horn */}
-      <mesh position={[0, 0.1, 0]} material={dark}>
-        <boxGeometry args={[0.75, 0.2, 0.45]} />
-      </mesh>
-      <mesh position={[0, 0.33, 0]} scale={[1, 1, 1]} material={iron}>
-        <cylinderGeometry args={[0.2, 0.3, 0.3, 4]} />
-      </mesh>
-      <mesh position={[0, 0.58, 0]} material={iron}>
-        <boxGeometry args={[0.8, 0.22, 0.42]} />
-      </mesh>
-      <mesh position={[0, 0.7, 0]} material={face}>
-        <boxGeometry args={[0.8, 0.04, 0.42]} />
-      </mesh>
-      <mesh position={[0.6, 0.6, 0]} rotation-z={-Math.PI / 2} material={iron}>
-        <coneGeometry args={[0.2, 0.46, 12]} />
-      </mesh>
-      <mesh position={[-0.45, 0.55, 0]} material={dark}>
-        <boxGeometry args={[0.12, 0.2, 0.32]} />
-      </mesh>
-      <mesh position={[-0.2, 0.74, 0.12]} material={dark}>
-        <cylinderGeometry args={[0.04, 0.04, 0.06, 8]} />
-      </mesh>
-    </group>
-  )
-}
-
-function Dagger() {
-  const blade = plastic('#eef3fa', { roughness: 0.18, metalness: 0.75 })
-  const edge = plastic('#b8c3d3', { roughness: 0.2, metalness: 0.75 })
-  const grip = plastic('#c7222c', { roughness: 0.55 })
-  const gold = plastic('#e3ac22', { roughness: 0.3, metalness: 0.6 })
-  return (
-    <group rotation-z={0.55} position={[0, 0.5, 0]}>
-      {/* Tapered blade with a fuller down the middle */}
-      <mesh position={[0, 0.55, 0]} scale={[1, 1, 0.22]} material={blade}>
-        <coneGeometry args={[0.13, 0.9, 4]} />
-      </mesh>
-      <mesh position={[0, 0.5, 0]} scale={[0.22, 1, 0.26]} material={edge}>
-        <coneGeometry args={[0.13, 0.7, 4]} />
-      </mesh>
-      {/* Crossguard, wrapped grip, pommel */}
-      <mesh position={[0, 0.08, 0]} material={gold}>
-        <boxGeometry args={[0.42, 0.06, 0.1]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.21, 0.08, 0]} material={gold}>
-          <sphereGeometry args={[0.05, 8, 6]} />
-        </mesh>
-      ))}
-      <mesh position={[0, -0.1, 0]} material={grip}>
-        <cylinderGeometry args={[0.04, 0.045, 0.3, 10]} />
-      </mesh>
-      {[-0.16, -0.1, -0.04].map((y) => (
-        <mesh key={y} position={[0, y, 0]} material={gold}>
-          <torusGeometry args={[0.046, 0.008, 6, 12]} />
-        </mesh>
-      ))}
-      <mesh position={[0, -0.28, 0]} material={gold}>
-        <sphereGeometry args={[0.07, 12, 10]} />
-      </mesh>
-    </group>
-  )
-}
-
-function tntLabel() {
-  return canvasTexture('loot-tnt-label', 128, 64, (ctx, w, h) => {
-    ctx.fillStyle = '#f4efe0'
-    ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = '#b3141b'
-    ctx.font = '900 44px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('TNT', w / 2, h / 2 + 2)
-  })
-}
-
-function TNT() {
-  const red = plastic('#d42a2a', { roughness: 0.55 })
-  const band = plastic('#d9c28a')
-  const fuse = plastic('#3a2a1c')
-  const spark = plastic('#ffb020', { emissive: '#ff7a00', emissiveIntensity: 1.2 })
-  return (
-    <group position={[0, 0.02, 0]} rotation-z={0.1}>
-      {[[-0.17, 0.06], [0.17, 0.06], [0, -0.14]].map(([x, z], i) => (
-        <group key={i} position={[x, 0, z]}>
-          <mesh position={[0, 0.5, 0]} material={red}>
-            <cylinderGeometry args={[0.15, 0.15, 1, 14]} />
-          </mesh>
-          <mesh position={[0, 1.0, 0]} material={band}>
-            <cylinderGeometry args={[0.1, 0.1, 0.03, 12]} />
-          </mesh>
-        </group>
-      ))}
-      {/* Twine bands and the label */}
-      {[0.25, 0.75].map((y) => (
-        <mesh key={y} position={[0, y, 0]} material={band}>
-          <cylinderGeometry args={[0.34, 0.34, 0.07, 18]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.5, 0.34]}>
-        <planeGeometry args={[0.36, 0.2]} />
-        <meshStandardMaterial map={tntLabel()} roughness={0.7} />
-      </mesh>
-      {/* Curled fuse with a spark */}
-      <mesh position={[0, 1.14, -0.02]} material={fuse}>
-        <cylinderGeometry args={[0.018, 0.018, 0.24, 6]} />
-      </mesh>
-      <mesh position={[0.08, 1.3, -0.02]} rotation-z={-0.9} material={fuse}>
-        <cylinderGeometry args={[0.018, 0.018, 0.2, 6]} />
-      </mesh>
-      <mesh position={[0.17, 1.38, -0.02]} material={spark}>
-        <icosahedronGeometry args={[0.07, 0]} />
-      </mesh>
-    </group>
-  )
-}
-
-function Bomb() {
-  const iron = plastic('#4b52b8', { roughness: 0.3, metalness: 0.35 })
-  const cap = plastic('#2b2f6e', { roughness: 0.4, metalness: 0.4 })
-  const shine = plastic('#c8ccff', { roughness: 0.2, emissive: '#8a90ff', emissiveIntensity: 0.4 })
-  const fuse = plastic('#3a2a1c')
-  const spark = plastic('#ffb020', { emissive: '#ff7a00', emissiveIntensity: 1.2 })
-  return (
-    <group position={[0, 0.55, 0]}>
-      <mesh material={iron}>
-        <sphereGeometry args={[0.52, 24, 18]} />
-      </mesh>
-      <mesh position={[0, 0.52, 0]} material={cap}>
-        <cylinderGeometry args={[0.15, 0.19, 0.16, 14]} />
-      </mesh>
-      <mesh position={[0, 0.62, 0]} rotation-x={Math.PI / 2} material={cap}>
-        <torusGeometry args={[0.15, 0.025, 8, 16]} />
-      </mesh>
-      <mesh position={[0.04, 0.8, 0]} rotation-z={-0.25} material={fuse}>
-        <cylinderGeometry args={[0.02, 0.02, 0.3, 6]} />
-      </mesh>
-      <mesh position={[0.14, 0.98, 0]} material={spark}>
-        <icosahedronGeometry args={[0.08, 0]} />
-      </mesh>
-      {/* Glossy highlight and a band around the middle */}
-      <mesh position={[-0.2, 0.25, 0.37]} scale={[1, 0.6, 0.4]} material={shine}>
-        <sphereGeometry args={[0.1, 10, 8]} />
-      </mesh>
-      <mesh rotation-x={Math.PI / 2} material={cap}>
-        <torusGeometry args={[0.52, 0.02, 6, 30]} />
-      </mesh>
-    </group>
-  )
-}
-
-function Helmet() {
-  const copper = plastic('#c9631b', { roughness: 0.35, metalness: 0.55 })
-  const dark = plastic('#8f410f', { roughness: 0.4, metalness: 0.55 })
-  const gold = plastic('#ffc736', { roughness: 0.3, metalness: 0.6 })
-  return (
-    <group position={[0, 0.04, 0]} rotation-y={0.5}>
-      {/* Dome, rim band and the crest running front to back */}
-      <mesh position={[0, 0.12, 0]} scale={[1, 0.95, 1.1]} material={copper}>
-        <sphereGeometry args={[0.5, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      <mesh position={[0, 0.14, 0]} rotation-x={Math.PI / 2} scale={[1, 1.1, 1]} material={gold}>
-        <torusGeometry args={[0.5, 0.045, 8, 28]} />
-      </mesh>
-      <mesh position={[0, 0.52, 0]} scale={[0.1, 0.34, 1.1]} material={dark}>
-        <sphereGeometry args={[0.5, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      {/* Neck guard, nose guard and cheek plates */}
-      <mesh position={[0, 0.07, -0.5]} rotation-x={-0.35} scale={[1, 0.25, 0.5]} material={copper}>
-        <cylinderGeometry args={[0.5, 0.45, 0.4, 20]} />
-      </mesh>
-      <mesh position={[0, 0.2, 0.55]} material={dark}>
-        <boxGeometry args={[0.07, 0.3, 0.05]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.46, 0.0, 0.1]} rotation-y={s * 0.2} material={dark}>
-          <boxGeometry args={[0.06, 0.3, 0.4]} />
-        </mesh>
-      ))}
-      {/* Rivets */}
-      {Array.from({ length: 8 }, (_, i) => {
-        const a = (i / 8) * Math.PI * 2
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.5, 0.14, Math.sin(a) * 0.55]} material={gold}>
-            <sphereGeometry args={[0.03, 8, 6]} />
-          </mesh>
-        )
-      })}
-    </group>
-  )
-}
-
-// Hexagonal crystal: prism plus a pointed tip, standing on its base at `pos`.
-function Crystal({ pos, rot, r, h, mat }) {
-  return (
-    <group position={pos} rotation={rot}>
-      <mesh position={[0, h / 2, 0]} material={mat}>
-        <cylinderGeometry args={[r, r * 1.08, h, 6]} />
-      </mesh>
-      <mesh position={[0, h + r * 0.7, 0]} material={mat}>
-        <coneGeometry args={[r, r * 1.4, 6]} />
-      </mesh>
-    </group>
-  )
-}
-
-const QUARTZ_SHARDS = [
-  { pos: [0, 0, 0], rot: [0, 0, 0], r: 0.2, h: 0.55 },
-  { pos: [0.25, 0, 0.05], rot: [0.1, 0.4, -0.5], r: 0.15, h: 0.4 },
-  { pos: [-0.25, 0, 0.1], rot: [0.2, 0.9, 0.55], r: 0.16, h: 0.38 },
-  { pos: [0.05, 0, -0.25], rot: [-0.5, 0.2, 0.1], r: 0.14, h: 0.34 },
-  { pos: [-0.1, 0, 0.28], rot: [0.55, 0.6, -0.1], r: 0.12, h: 0.28 },
-  { pos: [0.4, 0, -0.15], rot: [-0.3, 1.2, -0.95], r: 0.1, h: 0.2 },
-]
-
-function Quartz() {
-  const glass = { emissive: '#4aa8ff', emissiveIntensity: 0.55, roughness: 0.12, metalness: 0.1, flatShading: true }
-  const ice = plastic('#b8e6ff', glass)
-  const pale = plastic('#e6f6ff', { ...glass, emissiveIntensity: 0.8 })
-  return (
-    <group position={[0, 0.02, 0]} rotation-y={0.3}>
-      {QUARTZ_SHARDS.map((s, i) => (
-        <Crystal key={i} {...s} mat={i % 2 ? pale : ice} />
-      ))}
-      <mesh position={[0, 0.03, 0]} scale={[1, 0.3, 1]} material={ice}>
-        <dodecahedronGeometry args={[0.38, 0]} />
-      </mesh>
-    </group>
-  )
-}
-
-function Emerald() {
-  const mat = plastic('#2fe66a', { emissive: '#18c04a', emissiveIntensity: 0.5, roughness: 0.1, metalness: 0.1, flatShading: true })
-  return (
-    <group rotation={[0.5, 0, 0.2]} scale={[1, 0.75, 0.8]}>
-      <mesh material={mat}>
-        <octahedronGeometry args={[0.5, 0]} />
-      </mesh>
-    </group>
-  )
-}
-
-const AMETHYST_SHARDS = [
-  { pos: [0, 0, 0], rot: [0, 0, 0], r: 0.18, h: 0.5 },
-  { pos: [0.28, 0, 0.05], rot: [0.1, 0.4, -0.55], r: 0.14, h: 0.38 },
-  { pos: [-0.28, 0, 0.1], rot: [0.2, 0.9, 0.6], r: 0.15, h: 0.4 },
-  { pos: [0.05, 0, -0.26], rot: [-0.5, 0.2, 0.1], r: 0.12, h: 0.3 },
-  { pos: [-0.1, 0, 0.3], rot: [0.55, 0.6, -0.1], r: 0.11, h: 0.26 },
-]
-
-function Amethyst() {
-  const glass = { emissive: '#9a3aff', emissiveIntensity: 0.6, roughness: 0.12, metalness: 0.1, flatShading: true }
-  const deep = plastic('#a35cff', glass)
-  const pale = plastic('#d2a8ff', { ...glass, emissiveIntensity: 0.85 })
-  return (
-    <group position={[0, -0.1, 0]} rotation-y={0.3}>
-      {AMETHYST_SHARDS.map((s, i) => (
-        <Crystal key={i} {...s} mat={i % 2 ? pale : deep} />
-      ))}
-    </group>
-  )
-}
-
-function PorcelainVase() {
-  const white = plastic('#f4f8ff', { roughness: 0.2, metalness: 0.05 })
-  const blue = plastic('#2f5fc4', { roughness: 0.3 })
-  return (
-    <group position={[0, -0.3, 0]}>
-      <mesh position={[0, 0.06, 0]} material={blue}>
-        <cylinderGeometry args={[0.2, 0.24, 0.12, 20]} />
-      </mesh>
-      <mesh position={[0, 0.42, 0]} scale={[1, 1.15, 1]} material={white}>
-        <sphereGeometry args={[0.38, 20, 16]} />
-      </mesh>
-      <mesh position={[0, 0.42, 0]} scale={[1.01, 0.18, 1.01]} material={blue}>
-        <sphereGeometry args={[0.38, 20, 16]} />
-      </mesh>
-      <mesh position={[0, 0.88, 0]} material={white}>
-        <cylinderGeometry args={[0.15, 0.2, 0.3, 20]} />
-      </mesh>
-      <mesh position={[0, 1.04, 0]} material={blue}>
-        <cylinderGeometry args={[0.22, 0.17, 0.06, 20]} />
-      </mesh>
-    </group>
-  )
-}
-
-// Glowing material helper for the Legendary / Mythic models.
+// Glowing material helper for the rarer models.
 const shine = (color, emissive, k = 0.7, extra = {}) =>
   plastic(color, { emissive, emissiveIntensity: k, roughness: 0.25, metalness: 0.2, ...extra })
 const metal = (color, extra = {}) => plastic(color, { roughness: 0.3, metalness: 0.75, ...extra })
+// See-through ice / glass.
+const glass = (color, opacity = 0.45, extra = {}) =>
+  plastic(color, { transparent: true, opacity, roughness: 0.08, metalness: 0.1, depthWrite: false, ...extra })
 
-// Spiky crown: band plus `n` cones, optionally with a jewel on each tip.
-function SpikeCrown({ band, spike, jewel, n = 8, tall = 0.4 }) {
-  return (
-    <group position={[0, -0.15, 0]}>
-      <mesh position={[0, 0.1, 0]} material={band}>
-        <cylinderGeometry args={[0.42, 0.36, 0.22, 20, 1, true]} />
-      </mesh>
-      {Array.from({ length: n }, (_, i) => {
-        const a = (i / n) * Math.PI * 2
-        return (
-          <group key={i} position={[Math.cos(a) * 0.4, 0.2, Math.sin(a) * 0.4]}>
-            <mesh position={[0, tall / 2, 0]} material={spike}>
-              <coneGeometry args={[0.07, tall, 6]} />
-            </mesh>
-            {jewel && (
-              <mesh position={[0, tall + 0.04, 0]} material={jewel}>
-                <sphereGeometry args={[0.04, 8, 6]} />
-              </mesh>
-            )}
-          </group>
-        )
-      })}
-    </group>
-  )
-}
+const SNOW = '#f6fbff'
+const ICE = '#a9dcff'
+const ICE_DEEP = '#5fb4ee'
+const RED = '#d8322f'
+const GREEN = '#2f8f4e'
+const GOLD = '#f2c230'
+const WOOD = '#8a5a33'
 
-function PhoenixFeather() {
-  const flame = shine('#ff7a1a', '#ff4a00', 0.9)
-  const gold = shine('#ffd23a', '#ffa000', 0.8)
-  return (
-    <group rotation-z={0.5} position={[0, 0.05, 0]}>
-      <mesh position={[0, -0.05, 0]} material={gold}>
-        <cylinderGeometry args={[0.02, 0.03, 1.3, 6]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.17, 0.05, 0]} rotation-z={s * 0.18} scale={[0.5, 1.2, 0.12]} material={s > 0 ? flame : gold}>
-          <sphereGeometry args={[0.3, 14, 10]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.6, 0]} scale={[0.5, 1.2, 0.12]} material={flame}>
-        <sphereGeometry args={[0.13, 10, 8]} />
-      </mesh>
-    </group>
-  )
-}
+// ---- Tiny mesh helpers (always pass vectors: r3f.js can't skip undefined props) ----
 
-function StarFragment() {
-  const star = shine('#fff2a0', '#ffd23a', 1.1, { flatShading: true })
-  const core = shine('#ffffff', '#fff6c0', 1.4)
-  return (
-    <group rotation={[0.4, 0, 0.3]}>
-      {[0, 1, 2].map((i) => (
-        <mesh key={i} rotation={[i === 0 ? 0 : Math.PI / 2, i === 2 ? Math.PI / 2 : 0, 0]} material={star}>
-          <coneGeometry args={[0.14, 1.1, 4]} />
-        </mesh>
-      ))}
-      <mesh material={core}>
-        <icosahedronGeometry args={[0.2, 0]} />
-      </mesh>
-    </group>
-  )
-}
+const P0 = [0, 0, 0]
+const Box = ({ p = P0, s, m, r = P0 }) => (
+  <mesh position={p} rotation={r} material={m}>
+    <boxGeometry args={s} />
+  </mesh>
+)
+const Cyl = ({ p = P0, t, b = t, h, m, r = P0, seg = 20, open = false }) => (
+  <mesh position={p} rotation={r} material={m}>
+    <cylinderGeometry args={[t, b, h, seg, 1, open]} />
+  </mesh>
+)
+const Sph = ({ p = P0, r, m, sc = [1, 1, 1], rot = P0, seg = 16 }) => (
+  <mesh position={p} rotation={rot} scale={sc} material={m}>
+    <sphereGeometry args={[r, seg, Math.max(6, seg - 4)]} />
+  </mesh>
+)
+const Cone = ({ p = P0, r, h, m, rot = P0, seg = 16 }) => (
+  <mesh position={p} rotation={rot} material={m}>
+    <coneGeometry args={[r, h, seg]} />
+  </mesh>
+)
+const Tor = ({ p = P0, r, t, m, rot = P0, arc = Math.PI * 2, seg = 24, sc = [1, 1, 1] }) => (
+  <mesh position={p} rotation={rot} scale={sc} material={m}>
+    <torusGeometry args={[r, t, 10, seg, arc]} />
+  </mesh>
+)
+const Oct = ({ p = P0, r, m, rot = P0, sc = [1, 1, 1] }) => (
+  <mesh position={p} rotation={rot} scale={sc} material={m}>
+    <octahedronGeometry args={[r, 0]} />
+  </mesh>
+)
+const Ico = ({ p = P0, r, m, rot = P0, sc = [1, 1, 1], d = 0 }) => (
+  <mesh position={p} rotation={rot} scale={sc} material={m}>
+    <icosahedronGeometry args={[r, d]} />
+  </mesh>
+)
 
-function KrakenEye() {
-  const eye = plastic('#f4f1e0', { roughness: 0.15, metalness: 0.05 })
-  const iris = shine('#18d6a0', '#00b87a', 0.9)
-  const pupil = plastic('#050a0a', { roughness: 0.1 })
-  const skin = plastic('#5a2a7a', { roughness: 0.6 })
-  return (
-    <group>
-      <mesh material={eye}>
-        <sphereGeometry args={[0.45, 24, 18]} />
-      </mesh>
-      <mesh position={[0, 0, 0.32]} rotation-x={Math.PI / 2} material={iris}>
-        <cylinderGeometry args={[0.25, 0.25, 0.2, 20]} />
-      </mesh>
-      <mesh position={[0, 0, 0.43]} scale={[0.35, 1, 1]} rotation-x={Math.PI / 2} material={pupil}>
-        <cylinderGeometry args={[0.13, 0.13, 0.05, 16]} />
-      </mesh>
-      {[0, 1, 2, 3, 4].map((i) => {
-        const a = (i / 5) * Math.PI * 2 + 0.3
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.4, Math.sin(a) * 0.4 - 0.1, -0.15]} rotation-z={a} material={skin}>
-            <coneGeometry args={[0.08, 0.5, 8]} />
-          </mesh>
-        )
-      })}
-    </group>
-  )
-}
+// ---- Shared helpers ----
 
-function TitanGauntlet() {
-  const steel = metal('#9aa4b4')
-  const dark = metal('#4a5260')
-  const gem = shine('#ff3b3b', '#d00000', 0.9)
-  return (
-    <group position={[0, -0.1, 0]}>
-      <mesh position={[0, 0.1, 0]} material={dark}>
-        <cylinderGeometry args={[0.28, 0.34, 0.4, 12]} />
-      </mesh>
-      <mesh position={[0, 0.5, 0]} material={steel}>
-        <boxGeometry args={[0.62, 0.45, 0.4]} />
-      </mesh>
-      {[-0.22, -0.075, 0.075, 0.22].map((x, i) => (
-        <mesh key={i} position={[x, 0.82, 0.02]} material={steel}>
-          <boxGeometry args={[0.13, 0.22, 0.2]} />
-        </mesh>
-      ))}
-      <mesh position={[0.4, 0.55, 0]} rotation-z={-0.6} material={steel}>
-        <boxGeometry args={[0.14, 0.32, 0.17]} />
-      </mesh>
-      <mesh position={[0, 0.5, 0.22]} material={gem}>
-        <octahedronGeometry args={[0.1, 0]} />
-      </mesh>
-    </group>
-  )
-}
-
-function SunMedallion() {
-  const gold = shine('#ffc21a', '#ff9a00', 0.55, { metalness: 0.7 })
-  const face = shine('#fff0a0', '#ffd23a', 0.8)
-  return (
-    <group rotation-x={0.2}>
-      <mesh rotation-x={Math.PI / 2} material={gold}>
-        <cylinderGeometry args={[0.4, 0.4, 0.1, 28]} />
-      </mesh>
-      <mesh position={[0, 0, 0.06]} rotation-x={Math.PI / 2} material={face}>
-        <cylinderGeometry args={[0.24, 0.24, 0.04, 20]} />
-      </mesh>
-      {Array.from({ length: 12 }, (_, i) => {
-        const a = (i / 12) * Math.PI * 2
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.52, Math.sin(a) * 0.52, 0]} rotation-z={a - Math.PI / 2} material={gold}>
-            <coneGeometry args={[0.07, 0.24, 4]} />
-          </mesh>
-        )
-      })}
-    </group>
-  )
-}
-
-function FrostCrown() {
-  const ice = shine('#bfeaff', '#4ab8ff', 0.7, { flatShading: true })
-  const band = shine('#7ecbff', '#2a8cff', 0.6, { metalness: 0.4 })
-  return <SpikeCrown band={band} spike={ice} n={7} tall={0.55} />
-}
-
-function GriffinClaw() {
-  const bone = plastic('#e8d9b0', { roughness: 0.45 })
-  const gold = metal('#d9a82b')
-  return (
-    <group rotation-z={0.5} position={[0, -0.1, 0]}>
-      {[0, 1, 2, 3, 4].map((i) => (
-        <mesh key={i} position={[0, 0.08 + i * 0.17, 0]} rotation-z={i * 0.28} scale={[1, 1, 1]} material={bone}>
-          <coneGeometry args={[0.2 - i * 0.032, 0.34, 10]} />
-        </mesh>
-      ))}
-      <mesh position={[0.2, 0.95, 0]} rotation-z={Math.PI / 2 + 1.1} material={bone}>
-        <coneGeometry args={[0.05, 0.3, 8]} />
-      </mesh>
-      <mesh position={[0, 0.0, 0]} material={gold}>
-        <cylinderGeometry args={[0.22, 0.24, 0.12, 14]} />
-      </mesh>
-    </group>
-  )
-}
-
-function StormCrown() {
-  const dark = metal('#3a3f55')
-  const bolt = shine('#fff36a', '#ffe000', 1.2)
-  const band = metal('#58607e')
-  return (
-    <group>
-      <SpikeCrown band={band} spike={dark} jewel={bolt} n={6} tall={0.35} />
-      {/* Lightning bolt on the crown's front */}
-      <mesh position={[0, 0.0, 0.43]} rotation-z={0.3} material={bolt}>
-        <boxGeometry args={[0.07, 0.3, 0.04]} />
-      </mesh>
-      <mesh position={[0.05, -0.12, 0.43]} rotation-z={-0.5} material={bolt}>
-        <boxGeometry args={[0.06, 0.2, 0.04]} />
-      </mesh>
-    </group>
-  )
-}
-
-function TimeCrystal() {
-  const crystal = shine('#7ad8ff', '#2aa0ff', 0.8, { flatShading: true, transparent: true, opacity: 0.85 })
-  const ring = metal('#e0b84a')
-  const hand = shine('#ffffff', '#ffffff', 1)
-  return (
-    <group rotation-z={0.2}>
-      <mesh material={crystal}>
-        <octahedronGeometry args={[0.45, 0]} />
-      </mesh>
-      <mesh position={[0, 0.5, 0]} scale={[1, 0.8, 1]} material={crystal}>
-        <coneGeometry args={[0.18, 0.35, 6]} />
-      </mesh>
-      <mesh position={[0, -0.5, 0]} rotation-x={Math.PI} scale={[1, 0.8, 1]} material={crystal}>
-        <coneGeometry args={[0.18, 0.35, 6]} />
-      </mesh>
-      {/* Orbiting clock ring with hands */}
-      <mesh rotation-x={Math.PI / 2 - 0.4} material={ring}>
-        <torusGeometry args={[0.68, 0.03, 8, 40]} />
-      </mesh>
-      <mesh position={[0, 0.1, 0]} material={hand}>
-        <boxGeometry args={[0.03, 0.26, 0.03]} />
-      </mesh>
-      <mesh position={[0.07, 0, 0]} rotation-z={-1.2} material={hand}>
-        <boxGeometry args={[0.03, 0.18, 0.03]} />
-      </mesh>
-    </group>
-  )
-}
-
-function CelestialHarp() {
-  const gold = shine('#ffe27a', '#ffbf2a', 0.5, { metalness: 0.6 })
-  const string = shine('#ffffff', '#c8e8ff', 1)
-  return (
-    <group position={[0, -0.05, 0]} rotation-y={0.2}>
-      {/* Curved neck, straight pillar and soundboard */}
-      <mesh position={[-0.35, 0.45, 0]} rotation-z={-0.35} material={gold}>
-        <boxGeometry args={[0.09, 1.05, 0.09]} />
-      </mesh>
-      <mesh position={[0.1, 0.95, 0]} rotation-z={Math.PI / 2 - 0.35} material={gold}>
-        <torusGeometry args={[0.5, 0.045, 8, 24, Math.PI / 2]} />
-      </mesh>
-      <mesh position={[0.35, 0.4, 0]} material={gold}>
-        <boxGeometry args={[0.1, 1.0, 0.1]} />
-      </mesh>
-      <mesh position={[0, 0, 0]} material={gold}>
-        <boxGeometry args={[0.95, 0.1, 0.12]} />
-      </mesh>
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <mesh key={i} position={[-0.25 + i * 0.1, 0.45 + i * 0.03, 0]} material={string}>
-          <boxGeometry args={[0.012, 0.8 - i * 0.07, 0.012]} />
-        </mesh>
-      ))}
-      {/* Wings */}
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.6, 0.85, 0]} rotation-z={s * 0.9} scale={[0.5, 1.4, 0.12]} material={string}>
-          <sphereGeometry args={[0.15, 10, 8]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function ObsidianThrone() {
-  const rock = plastic('#14101c', { roughness: 0.15, metalness: 0.4, flatShading: true })
-  const vein = shine('#b04aff', '#8a1aff', 1)
-  return (
-    <group position={[0, -0.3, 0]}>
-      <mesh position={[0, 0.2, 0]} material={rock}>
-        <boxGeometry args={[0.75, 0.4, 0.7]} />
-      </mesh>
-      <mesh position={[0, 0.85, -0.28]} material={rock}>
-        <boxGeometry args={[0.7, 1.0, 0.14]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <group key={s}>
-          <mesh position={[s * 0.36, 0.5, 0.02]} material={rock}>
-            <boxGeometry args={[0.1, 0.3, 0.6]} />
-          </mesh>
-          <mesh position={[s * 0.3, 1.45, -0.28]} material={rock}>
-            <coneGeometry args={[0.1, 0.4, 4]} />
-          </mesh>
-        </group>
-      ))}
-      <mesh position={[0, 1.55, -0.28]} material={rock}>
-        <coneGeometry args={[0.12, 0.6, 4]} />
-      </mesh>
-      <mesh position={[0, 0.9, -0.2]} material={vein}>
-        <boxGeometry args={[0.06, 0.8, 0.02]} />
-      </mesh>
-      <mesh position={[0, 0.42, 0.36]} material={vein}>
-        <boxGeometry args={[0.6, 0.03, 0.02]} />
-      </mesh>
-    </group>
-  )
-}
-
-function PhoenixHeart() {
-  const heart = shine('#ff2a4a', '#ff1030', 1)
-  const flame = shine('#ffb030', '#ff6a00', 1)
-  return (
-    <group>
-      {/* Heart = two lobes + a cone */}
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.17, 0.12, 0]} material={heart}>
-          <sphereGeometry args={[0.24, 16, 12]} />
-        </mesh>
-      ))}
-      <mesh position={[0, -0.18, 0]} rotation-x={Math.PI} material={heart}>
-        <coneGeometry args={[0.38, 0.6, 16]} />
-      </mesh>
-      {/* Flames licking upward */}
-      {[-0.25, 0, 0.25].map((x, i) => (
-        <mesh key={i} position={[x, 0.5 + (i === 1 ? 0.12 : 0), 0]} material={flame}>
-          <coneGeometry args={[0.1, 0.4 + (i === 1 ? 0.2 : 0), 8]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function DreamCatcher() {
-  const wood = plastic('#8a5a2a', { roughness: 0.7 })
-  const web = shine('#e8e0ff', '#a98aff', 0.6)
-  const feather = ['#5ad6ff', '#c06aff', '#ff7ac8']
-  return (
-    <group position={[0, 0.1, 0]} rotation-x={0.1}>
-      <mesh material={wood}>
-        <torusGeometry args={[0.42, 0.04, 8, 32]} />
-      </mesh>
-      {/* Web: spokes and an inner ring */}
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <mesh key={i} rotation-z={(i / 6) * Math.PI} material={web}>
-          <boxGeometry args={[0.8, 0.012, 0.012]} />
-        </mesh>
-      ))}
-      <mesh material={web}>
-        <torusGeometry args={[0.2, 0.012, 6, 24]} />
-      </mesh>
-      {/* Hanging feathers */}
-      {feather.map((c, i) => (
-        <group key={i} position={[(i - 1) * 0.25, -0.5, 0]}>
-          <mesh position={[0, -0.12, 0]} material={wood}>
-            <cylinderGeometry args={[0.006, 0.006, 0.25, 4]} />
-          </mesh>
-          <mesh position={[0, -0.4, 0]} scale={[0.5, 1.5, 0.15]} material={shine(c, c, 0.6)}>
-            <sphereGeometry args={[0.1, 10, 8]} />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  )
-}
-
-// ---- Epic models ----
-
-function JadeIdol() {
-  const jade = shine('#3fbf7a', '#1a8a4a', 0.35, { roughness: 0.3 })
-  const dark = plastic('#1f6b45', { roughness: 0.4 })
-  return (
-    <group position={[0, -0.35, 0]}>
-      <mesh position={[0, 0.1, 0]} material={dark}>
-        <boxGeometry args={[0.6, 0.2, 0.5]} />
-      </mesh>
-      <mesh position={[0, 0.5, 0]} scale={[1, 1.2, 0.8]} material={jade}>
-        <sphereGeometry args={[0.28, 16, 12]} />
-      </mesh>
-      <mesh position={[0, 0.98, 0]} material={jade}>
-        <boxGeometry args={[0.38, 0.38, 0.34]} />
-      </mesh>
-      <mesh position={[0, 1.22, 0]} material={dark}>
-        <boxGeometry args={[0.44, 0.1, 0.4]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.09, 1.0, 0.18]} material={dark}>
-          <boxGeometry args={[0.08, 0.06, 0.03]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.9, 0.18]} material={dark}>
-        <boxGeometry args={[0.07, 0.12, 0.05]} />
-      </mesh>
-    </group>
-  )
-}
-
-function RoyalCrown() {
-  const gold = metal('#f2c230', { emissive: '#8a5a00', emissiveIntensity: 0.25 })
-  const red = shine('#e0203a', '#b00020', 0.7)
-  const blue = shine('#2a6aff', '#1040c0', 0.7)
-  return (
-    <group position={[0, 0.05, 0]}>
-      <SpikeCrown band={gold} spike={gold} jewel={red} n={6} tall={0.38} />
-      {/* Jewels on the band */}
-      {[0, 1, 2, 3].map((i) => {
-        const a = (i / 4) * Math.PI * 2 + Math.PI / 4
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.4, -0.04, Math.sin(a) * 0.4]} material={i % 2 ? blue : red}>
-            <sphereGeometry args={[0.05, 8, 6]} />
-          </mesh>
-        )
-      })}
-      {/* Velvet cap */}
-      <mesh position={[0, 0.05, 0]} scale={[1, 0.7, 1]} material={plastic('#8a1230', { roughness: 0.9 })}>
-        <sphereGeometry args={[0.36, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-    </group>
-  )
-}
-
-function VikingHelmet() {
-  const steel = metal('#9ba3ad')
-  const bone = plastic('#efe6cc', { roughness: 0.5 })
-  const dark = metal('#555c66')
-  return (
-    <group position={[0, -0.1, 0]}>
-      <mesh position={[0, 0.25, 0]} material={steel}>
-        <sphereGeometry args={[0.45, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      <mesh position={[0, 0.27, 0]} rotation-x={Math.PI / 2} material={dark}>
-        <torusGeometry args={[0.45, 0.04, 6, 28]} />
-      </mesh>
-      <mesh position={[0, 0.2, 0.43]} material={dark}>
-        <boxGeometry args={[0.07, 0.3, 0.04]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * 0.45, 0.5, 0]}>
-          <mesh rotation-z={-s * 0.9} position={[s * 0.1, 0.05, 0]} material={bone}>
-            <coneGeometry args={[0.08, 0.5, 10]} />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  )
-}
-
-function WarDrum() {
-  const wood = plastic('#7a4a22', { roughness: 0.7 })
-  const skin = plastic('#f0e2c0', { roughness: 0.8 })
-  const rope = plastic('#d8b070')
-  const stick = plastic('#c89a5a')
-  return (
-    <group position={[0, -0.2, 0]}>
-      <mesh position={[0, 0.4, 0]} material={wood}>
-        <cylinderGeometry args={[0.42, 0.42, 0.6, 24]} />
-      </mesh>
-      {[0.1, 0.7].map((y) => (
-        <mesh key={y} position={[0, y, 0]} material={skin}>
-          <cylinderGeometry args={[0.45, 0.45, 0.04, 24]} />
-        </mesh>
-      ))}
-      {Array.from({ length: 8 }, (_, i) => {
-        const a = (i / 8) * Math.PI * 2
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.43, 0.4, Math.sin(a) * 0.43]} rotation-z={(i % 2 ? 1 : -1) * 0.25} material={rope}>
-            <boxGeometry args={[0.025, 0.7, 0.025]} />
-          </mesh>
-        )
-      })}
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.15, 0.85, 0.05]} rotation-z={s * 0.7} material={stick}>
-          <cylinderGeometry args={[0.02, 0.03, 0.55, 6]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function DragonEgg() {
-  const shell = shine('#a8142a', '#6a0010', 0.35, { roughness: 0.35, flatShading: true })
-  const scale = shine('#ffb02a', '#ff7a00', 0.6)
-  return (
-    <group>
-      <mesh scale={[0.8, 1.15, 0.8]} material={shell}>
-        <sphereGeometry args={[0.5, 20, 16]} />
-      </mesh>
-      {[[0, 0.1, 0.4], [0.3, -0.15, 0.3], [-0.3, -0.1, 0.32], [0.15, 0.4, 0.3], [-0.2, 0.35, 0.3], [0, -0.4, 0.28]].map((p, i) => (
-        <mesh key={i} position={p} rotation={[0.3, 0, 0.8]} scale={[1, 1.3, 0.4]} material={scale}>
-          <octahedronGeometry args={[0.1, 0]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function MagicLamp() {
-  const gold = shine('#f2bd2a', '#a86a00', 0.4, { metalness: 0.8 })
-  const smoke = shine('#9ae0ff', '#4ab8ff', 0.8, { transparent: true, opacity: 0.75 })
-  return (
-    <group position={[0, -0.2, 0]}>
-      <mesh position={[0, 0.2, 0]} scale={[1, 0.55, 0.7]} material={gold}>
-        <sphereGeometry args={[0.45, 20, 12]} />
-      </mesh>
-      <mesh position={[0, 0.02, 0]} material={gold}>
-        <cylinderGeometry args={[0.16, 0.2, 0.1, 14]} />
-      </mesh>
-      <mesh position={[0, 0.46, 0]} material={gold}>
-        <sphereGeometry args={[0.08, 10, 8]} />
-      </mesh>
-      {/* Spout and handle */}
-      <mesh position={[0.52, 0.34, 0]} rotation-z={-0.9} material={gold}>
-        <coneGeometry args={[0.09, 0.55, 10]} />
-      </mesh>
-      <mesh position={[-0.5, 0.3, 0]} rotation-z={0} material={gold}>
-        <torusGeometry args={[0.16, 0.035, 8, 16, Math.PI * 1.4]} />
-      </mesh>
-      {/* Smoke wisp */}
-      {[0, 1, 2].map((i) => (
-        <mesh key={i} position={[0.75 + Math.sin(i * 1.8) * 0.08, 0.65 + i * 0.2, 0]} material={smoke}>
-          <sphereGeometry args={[0.1 - i * 0.02, 10, 8]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function SirenHarp() {
-  const shell = shine('#4fd6c8', '#10a89a', 0.5, { metalness: 0.3 })
-  const pearl = shine('#fff0f8', '#ffc0e8', 0.5)
-  return (
-    <group position={[0, -0.05, 0]} rotation-y={0.2}>
-      {/* Frame is a half-open shell fan */}
-      <mesh position={[-0.35, 0.45, 0]} rotation-z={0.15} material={shell}>
-        <boxGeometry args={[0.09, 1.0, 0.09]} />
-      </mesh>
-      <mesh position={[0.4, 0.35, 0]} material={shell}>
-        <boxGeometry args={[0.09, 0.8, 0.09]} />
-      </mesh>
-      <mesh position={[0.02, 0.88, 0]} rotation-z={-0.38} material={shell}>
-        <boxGeometry args={[0.95, 0.09, 0.09]} />
-      </mesh>
-      <mesh position={[0.02, -0.02, 0]} material={shell}>
-        <boxGeometry args={[0.85, 0.09, 0.09]} />
-      </mesh>
-      {[0, 1, 2, 3, 4].map((i) => (
-        <mesh key={i} position={[-0.22 + i * 0.15, 0.43 + i * 0.01, 0]} material={pearl}>
-          <boxGeometry args={[0.012, 0.8 - i * 0.12, 0.012]} />
-        </mesh>
-      ))}
-      <mesh position={[-0.35, 0.95, 0]} material={pearl}>
-        <sphereGeometry args={[0.09, 12, 10]} />
-      </mesh>
-    </group>
-  )
-}
-
-function PirateFlag() {
-  const wood = plastic('#6a4524', { roughness: 0.7 })
-  const cloth = plastic('#15161c', { roughness: 0.9, side: DoubleSide })
-  const white = plastic('#f6f4ea')
-  return (
-    <group position={[0, -0.5, 0]}>
-      <mesh position={[-0.35, 0.7, 0]} material={wood}>
-        <cylinderGeometry args={[0.03, 0.04, 1.5, 8]} />
-      </mesh>
-      <mesh position={[-0.35, 1.47, 0]} material={wood}>
-        <sphereGeometry args={[0.06, 8, 6]} />
-      </mesh>
-      <mesh position={[0.15, 1.05, 0]} material={cloth}>
-        <boxGeometry args={[1.0, 0.65, 0.02]} />
-      </mesh>
-      <group position={[0.15, 1.05, 0.02]}>
-        <mesh position={[0, 0.06, 0]} material={white}>
-          <sphereGeometry args={[0.1, 12, 10]} />
-        </mesh>
-        {[-1, 1].map((s) => (
-          <mesh key={s} position={[0, -0.1, 0]} rotation-z={s * 0.6} material={white}>
-            <boxGeometry args={[0.38, 0.04, 0.01]} />
-          </mesh>
-        ))}
-      </group>
-    </group>
-  )
-}
-
-function MoonMask() {
-  const silver = shine('#dfe6ff', '#8aa0ff', 0.45, { metalness: 0.5 })
-  const dark = plastic('#0a0c1c')
-  const star = shine('#fff6a0', '#ffd23a', 1)
-  return (
-    <group rotation-x={-0.1}>
-      <mesh scale={[0.85, 1.05, 0.5]} material={silver}>
-        <sphereGeometry args={[0.5, 22, 16]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.18, 0.1, 0.24]} rotation-z={s * 0.3} scale={[1, 0.45, 0.3]} material={dark}>
-          <sphereGeometry args={[0.1, 10, 8]} />
-        </mesh>
-      ))}
-      <mesh position={[0, -0.12, 0.25]} material={silver}>
-        <coneGeometry args={[0.06, 0.2, 6]} />
-      </mesh>
-      <mesh position={[0, -0.3, 0.2]} scale={[1, 0.3, 0.3]} material={dark}>
-        <sphereGeometry args={[0.12, 10, 8]} />
-      </mesh>
-      <mesh position={[0, 0.38, 0.2]} material={star}>
-        <octahedronGeometry args={[0.07, 0]} />
-      </mesh>
-    </group>
-  )
-}
-
-function ThunderHammer() {
-  const steel = metal('#8a94a8')
-  const wood = plastic('#7a5028', { roughness: 0.7 })
-  const bolt = shine('#fff36a', '#ffe000', 1.2)
-  return (
-    <group rotation-z={0.6} position={[0, -0.05, 0]}>
-      <mesh position={[0, -0.1, 0]} material={wood}>
-        <cylinderGeometry args={[0.05, 0.06, 1.1, 8]} />
-      </mesh>
-      <mesh position={[0, 0.5, 0]} material={steel}>
-        <boxGeometry args={[0.8, 0.4, 0.4]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.41, 0.5, 0]} material={bolt}>
-          <boxGeometry args={[0.03, 0.3, 0.3]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.5, 0.21]} rotation-z={0.3} material={bolt}>
-        <boxGeometry args={[0.06, 0.28, 0.02]} />
-      </mesh>
-      <mesh position={[0, -0.7, 0]} material={steel}>
-        <sphereGeometry args={[0.07, 8, 6]} />
-      </mesh>
-    </group>
-  )
-}
-
-function GoldenChalice() {
-  const gold = metal('#f2c230', { emissive: '#8a5a00', emissiveIntensity: 0.3 })
-  const wine = shine('#9a1030', '#600010', 0.4)
-  const gem = shine('#3aa0ff', '#1060d0', 0.8)
-  return (
-    <group position={[0, -0.4, 0]}>
-      <mesh position={[0, 0.04, 0]} material={gold}>
-        <cylinderGeometry args={[0.3, 0.34, 0.08, 20]} />
-      </mesh>
-      <mesh position={[0, 0.3, 0]} material={gold}>
-        <cylinderGeometry args={[0.05, 0.08, 0.5, 10]} />
-      </mesh>
-      <mesh position={[0, 0.42, 0]} material={gem}>
-        <sphereGeometry args={[0.08, 10, 8]} />
-      </mesh>
-      <mesh position={[0, 0.88, 0]} material={gold}>
-        <cylinderGeometry args={[0.38, 0.12, 0.5, 20, 1, true]} />
-      </mesh>
-      <mesh position={[0, 1.08, 0]} rotation-x={-Math.PI / 2} material={wine}>
-        <circleGeometry args={[0.35, 20]} />
-      </mesh>
-      <mesh position={[0, 1.13, 0]} rotation-x={Math.PI / 2} material={gold}>
-        <torusGeometry args={[0.38, 0.025, 6, 24]} />
-      </mesh>
-    </group>
-  )
-}
-
-// ---- Shared helpers for the remaining models ----
-
-// Group that keeps spinning about one axis (orbiting rings, sparkles, ...).
 function Spin({ speed = 1, axis = 'y', children, ...props }) {
   const ref = useRef()
   useFrame((_, dt) => {
@@ -1460,108 +108,449 @@ function Sparkles({ spots, mat, size = 0.035 }) {
   ))
 }
 
-// ---- Common ----
-
-function Feather() {
-  const vane = plastic('#f4f2ec', { roughness: 0.85 })
-  const tip = plastic('#3a6ad8', { roughness: 0.8 })
-  const shaft = plastic('#d8cfb8', { roughness: 0.5 })
-  const stripe = plastic('#8a8478', { roughness: 0.9 })
+function SpikeCrown({ band, spike, jewel, n = 8, tall = 0.4 }) {
   return (
-    <group rotation={[0.2, 0, 0.55]}>
-      {/* Quill: bare calamus at the bottom, rachis running up the middle */}
-      <mesh position={[0, -0.05, 0]} material={shaft}>
-        <cylinderGeometry args={[0.012, 0.025, 1.2, 8]} />
+    <group position={[0, -0.15, 0]}>
+      <mesh position={[0, 0.1, 0]} material={band}>
+        <cylinderGeometry args={[0.42, 0.36, 0.22, 20, 1, true]} />
       </mesh>
-      {/* Two vane halves, the right one a little wider */}
-      <mesh position={[-0.07, 0.12, 0]} rotation-z={0.06} scale={[0.32, 1.45, 0.05]} material={vane}>
-        <sphereGeometry args={[0.3, 16, 12]} />
-      </mesh>
-      <mesh position={[0.08, 0.1, 0]} rotation-z={-0.06} scale={[0.38, 1.4, 0.05]} material={vane}>
-        <sphereGeometry args={[0.3, 16, 12]} />
-      </mesh>
-      {/* Dark barb stripes and blue tip */}
-      {[-0.12, 0.05, 0.22].map((y, i) => (
-        <mesh key={i} position={[0, y, 0.012]} rotation-z={0.35} material={stripe}>
-          <boxGeometry args={[0.24, 0.025, 0.01]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.48, 0]} scale={[0.4, 0.7, 0.06]} material={tip}>
-        <sphereGeometry args={[0.18, 12, 10]} />
-      </mesh>
-      {/* Ragged notch on one edge */}
-      <mesh position={[0.2, -0.1, 0]} rotation-z={0.8} material={vane}>
-        <boxGeometry args={[0.12, 0.03, 0.02]} />
-      </mesh>
-    </group>
-  )
-}
-
-function Seashell() {
-  const pink = plastic('#f7b8a8', { roughness: 0.45 })
-  const cream = plastic('#fff0dc', { roughness: 0.45 })
-  const ribs = 9
-  return (
-    <group rotation-x={-0.6} position={[0, -0.1, 0]}>
-      {/* Scallop: ribs fanning out from the hinge */}
-      {Array.from({ length: ribs }, (_, i) => {
-        const a = -1.15 + (i / (ribs - 1)) * 2.3
+      {Array.from({ length: n }, (_, i) => {
+        const a = (i / n) * Math.PI * 2
         return (
-          <group key={i} rotation-z={a}>
-            <mesh position={[0, 0.3, 0.02 - Math.abs(a) * 0.03]} scale={[0.13, 0.36, 0.07]} material={i % 2 ? cream : pink}>
-              <sphereGeometry args={[1, 12, 10]} />
+          <group key={i} position={[Math.cos(a) * 0.4, 0.2, Math.sin(a) * 0.4]}>
+            <mesh position={[0, tall / 2, 0]} material={spike}>
+              <coneGeometry args={[0.07, tall, 6]} />
             </mesh>
+            {jewel && (
+              <mesh position={[0, tall + 0.04, 0]} material={jewel}>
+                <sphereGeometry args={[0.04, 8, 6]} />
+              </mesh>
+            )}
           </group>
         )
       })}
-      {/* Hinge with its two ears */}
-      <mesh position={[0, 0.02, 0]} material={pink}>
-        <boxGeometry args={[0.32, 0.1, 0.08]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.15, 0.04, 0]} rotation-z={s * 0.3} material={cream}>
-          <boxGeometry args={[0.1, 0.12, 0.06]} />
-        </mesh>
+    </group>
+  )
+}
+
+// Six-armed flat snowflake in the XY plane; `len` is arm length from the centre.
+function Flake({ len = 0.5, w = 0.05, depth = 0.05, m, branches = true }) {
+  const lb = len * 0.32
+  const th = Math.PI / 4
+  return (
+    <group>
+      {[0, 1, 2].map((i) => (
+        <group key={i} rotation-z={(i / 3) * Math.PI}>
+          <Box s={[len * 2, w, depth]} m={m} />
+          {branches &&
+            [-1, 1].flatMap((dir) =>
+              [0.45, 0.75].flatMap((f) =>
+                [-1, 1].map((sd) => {
+                  const dx = dir * Math.cos(th)
+                  const dy = sd * Math.sin(th)
+                  const bl = lb * (1.2 - f * 0.6)
+                  return (
+                    <Box
+                      key={`${dir}${f}${sd}`}
+                      p={[dir * len * f + (dx * bl) / 2, (dy * bl) / 2, 0]}
+                      r={[0, 0, Math.atan2(dy, dx)]}
+                      s={[bl, w * 0.8, depth]}
+                      m={m}
+                    />
+                  )
+                }),
+              ),
+            )}
+        </group>
       ))}
     </group>
   )
 }
 
-function Acorn() {
-  const nut = plastic('#b5702a', { roughness: 0.35 })
-  const cap = plastic('#6b4a2a', { roughness: 0.95 })
-  const bump = plastic('#5a3c20', { roughness: 0.95 })
+// ---- Common ----
+
+function WoolMitten() {
+  const wool = plastic(RED, { roughness: 0.95 })
+  const white = plastic(SNOW, { roughness: 0.95 })
   return (
-    <group position={[0, -0.05, 0]} rotation-z={0.25}>
-      <mesh scale={[1, 1.25, 1]} material={nut}>
-        <sphereGeometry args={[0.3, 20, 16]} />
+    <group position={[0, 0.05, 0]} rotation-y={0.3}>
+      <Sph p={[0, 0.55, 0]} r={0.32} sc={[1, 1.25, 0.6]} m={wool} />
+      <Sph p={[0.3, 0.42, 0]} r={0.15} sc={[0.8, 1.3, 0.7]} rot={[0, 0, -0.7]} m={wool} />
+      <group scale={[1, 1, 0.62]}>
+        <Cyl p={[0, 0.18, 0]} t={0.28} h={0.3} m={white} />
+      </group>
+      {[0.1, 0.16, 0.22].map((y) => (
+        <Box key={y} p={[0, y, 0.18]} s={[0.4, 0.025, 0.04]} m={wool} />
+      ))}
+      {/* Nordic snowflake on the back of the hand */}
+      <group position={[0, 0.62, 0.2]} scale={[0.6, 0.6, 0.6]}>
+        <Flake len={0.2} w={0.04} depth={0.03} m={white} branches={false} />
+      </group>
+      <Oct p={[0, 0.92, 0.04]} r={0.05} m={white} />
+    </group>
+  )
+}
+
+function WinterBoot() {
+  const leather = plastic('#7a4a2a', { roughness: 0.7 })
+  const dark = plastic('#2c2a30', { roughness: 0.6 })
+  const fur = plastic(SNOW, { roughness: 1 })
+  const lace = plastic('#f0e8d8', { roughness: 0.6 })
+  return (
+    <group rotation-y={0.5}>
+      <Box p={[0, 0.05, 0.1]} s={[0.46, 0.1, 0.95]} m={dark} />
+      <Sph p={[0, 0.25, 0.4]} r={0.27} sc={[0.95, 0.8, 1.2]} m={leather} />
+      <Box p={[0, 0.22, 0.05]} s={[0.46, 0.3, 0.6]} m={leather} />
+      <Cyl p={[0, 0.55, -0.1]} t={0.24} b={0.26} h={0.7} m={leather} seg={18} />
+      <Tor p={[0, 0.92, -0.1]} r={0.27} t={0.09} rot={[Math.PI / 2, 0, 0]} m={fur} />
+      {[0.38, 0.52, 0.66, 0.8].map((y) => (
+        <Box key={y} p={[0, y, 0.16]} s={[0.3, 0.03, 0.03]} m={lace} />
+      ))}
+    </group>
+  )
+}
+
+function SnowyMug() {
+  const blue = plastic('#8ec9ec', { roughness: 0.35 })
+  const white = plastic(SNOW, { roughness: 0.9 })
+  return (
+    <group>
+      <Cyl p={[0, 0.35, 0]} t={0.34} b={0.3} h={0.7} m={blue} />
+      {[0.22, 0.32].map((y) => (
+        <Tor key={y} p={[0, y, 0]} r={0.318} t={0.018} rot={[Math.PI / 2, 0, 0]} m={white} />
+      ))}
+      <Tor p={[0.34, 0.38, 0]} r={0.17} t={0.05} arc={Math.PI} rot={[0, 0, -Math.PI / 2]} m={blue} />
+      <Sph p={[0, 0.72, 0]} r={0.31} sc={[1, 0.55, 1]} m={white} />
+      <Sph p={[0.14, 0.9, 0.05]} r={0.1} sc={[1, 0.7, 1]} m={white} />
+    </group>
+  )
+}
+
+function CandyCane() {
+  const red = plastic('#e02a35', { roughness: 0.35 })
+  const white = plastic('#fbfbfb', { roughness: 0.35 })
+  return (
+    <group rotation={[0, 0.4, 0.08]}>
+      {Array.from({ length: 6 }, (_, i) => (
+        <Cyl key={i} p={[0, 0.065 + i * 0.13, 0]} t={0.07} h={0.13} m={i % 2 ? white : red} seg={14} />
+      ))}
+      <Tor p={[-0.2, 0.78, 0]} r={0.2} t={0.07} arc={Math.PI / 2} m={red} />
+      <Tor p={[-0.2, 0.78, 0]} r={0.2} t={0.07} arc={Math.PI / 2} rot={[0, 0, Math.PI / 2]} m={white} />
+      <Sph p={[-0.4, 0.78, 0]} r={0.07} m={white} seg={12} />
+      <Tor p={[-0.2, 0.55, 0.08]} r={0.14} t={0.015} rot={[Math.PI / 2, 0, 0]} m={shine('#2fa84a', '#1a6a2a', 0.2)} />
+    </group>
+  )
+}
+
+function CoalButton() {
+  const coal = plastic('#14151c', { roughness: 0.45, flatShading: true })
+  const hi = plastic('#3a3d52', { roughness: 0.4, flatShading: true })
+  const white = plastic(SNOW, { roughness: 0.9 })
+  const spark = shine('#bfe6ff', '#7ac8ff', 0.9)
+  return (
+    <group>
+      <Ico p={[0, 0.27, 0]} r={0.27} m={coal} />
+      <Ico p={[-0.27, 0.2, 0.1]} r={0.2} m={hi} rot={[0.3, 0.5, 0]} />
+      <Ico p={[0.27, 0.17, 0.14]} r={0.17} m={coal} rot={[0.6, 0.2, 0.4]} />
+      <Ico p={[0.02, 0.2, -0.28]} r={0.2} m={hi} rot={[0.1, 0.9, 0]} />
+      <Sph p={[0.05, 0.5, 0.05]} r={0.12} sc={[1, 0.5, 1]} m={white} />
+      <Oct p={[-0.08, 0.38, 0.22]} r={0.04} m={spark} />
+      <Oct p={[0.15, 0.3, 0.2]} r={0.03} m={spark} />
+    </group>
+  )
+}
+
+function CarrotNose() {
+  const orange = plastic('#ff8a1f', { roughness: 0.55 })
+  const dark = plastic('#d86a0a', { roughness: 0.6 })
+  const leaf = plastic('#3aa850', { roughness: 0.6 })
+  return (
+    <group position={[0, 0.22, 0]} rotation-y={0.5}>
+      <Cone r={0.2} h={0.9} m={orange} rot={[0, 0, -Math.PI / 2]} />
+      {[-0.3, -0.1, 0.1, 0.3].map((x) => (
+        <Tor key={x} p={[x, 0, 0]} r={(0.2 * (0.45 - x)) / 0.9 + 0.004} t={0.012} rot={[0, Math.PI / 2, 0]} m={dark} />
+      ))}
+      {[-0.5, 0, 0.5].map((a, i) => (
+        <Cone key={i} p={[-0.55, Math.sin(a * 2) * 0.06, Math.cos(a * 2) * 0.06]} r={0.04} h={0.25} rot={[a, 0, Math.PI / 2]} m={leaf} seg={6} />
+      ))}
+    </group>
+  )
+}
+
+function Snowball() {
+  const white = plastic('#fbfdff', { roughness: 0.95 })
+  const shade = plastic('#dcecf8', { roughness: 0.95 })
+  const spark = shine('#e8f6ff', '#9ad8ff', 0.8)
+  return (
+    <group position={[0, 0.45, 0]}>
+      <Sph r={0.45} m={white} seg={22} />
+      <Sph p={[0.3, 0.18, 0.25]} r={0.18} m={shade} />
+      <Sph p={[-0.3, 0.25, 0.2]} r={0.15} m={white} />
+      <Sph p={[0.05, -0.1, 0.42]} r={0.14} m={shade} />
+      <Sph p={[-0.1, 0.38, -0.2]} r={0.17} m={white} />
+      <Oct p={[0.2, 0.38, 0.22]} r={0.04} m={spark} />
+      <Oct p={[-0.35, -0.1, 0.28]} r={0.035} m={spark} />
+    </group>
+  )
+}
+
+function Icicle() {
+  const ice = glass(ICE, 0.75)
+  const core = glass('#e8f7ff', 0.85)
+  const white = plastic(SNOW, { roughness: 0.95 })
+  return (
+    <group>
+      <Sph p={[0, 0.04, 0]} r={0.35} sc={[1.3, 0.35, 1.3]} m={white} />
+      <Cone p={[0, 0.58, 0]} r={0.17} h={1.1} m={ice} seg={7} />
+      <Cone p={[0, 0.5, 0]} r={0.08} h={0.85} m={core} seg={7} />
+      <Cone p={[0.26, 0.4, 0.05]} r={0.11} h={0.75} m={ice} seg={6} rot={[0, 0, -0.18]} />
+      <Cone p={[-0.24, 0.32, -0.08]} r={0.09} h={0.55} m={ice} seg={6} rot={[0, 0, 0.2]} />
+    </group>
+  )
+}
+
+function TwigArm() {
+  const bark = plastic('#6a4526', { roughness: 0.95 })
+  const dark = plastic('#4a2f18', { roughness: 0.95 })
+  const white = plastic(SNOW, { roughness: 0.95 })
+  return (
+    <group rotation-y={0.4} position={[0, 0, 0]}>
+      <Cyl p={[0, 0.1, 0]} t={0.045} b={0.065} h={1.15} m={bark} r={[0, 0, Math.PI / 2]} seg={8} />
+      <Cyl p={[0.24, 0.3, 0]} t={0.018} b={0.035} h={0.45} m={bark} r={[0, 0, -Math.PI / 4]} seg={6} />
+      <Cyl p={[-0.2, 0.3, 0.02]} t={0.018} b={0.03} h={0.4} m={bark} r={[0, 0, Math.PI / 4]} seg={6} />
+      <Cyl p={[0.5, 0.15, 0]} t={0.015} b={0.03} h={0.3} m={dark} r={[0, 0, -Math.PI / 3]} seg={6} />
+      <Sph p={[-0.05, 0.19, 0]} r={0.1} sc={[1.5, 0.35, 1]} m={white} />
+      <Sph p={[0.3, 0.4, 0.02]} r={0.05} sc={[1.2, 0.4, 1]} m={white} />
+      <Sph p={[-0.58, 0.1, 0]} r={0.065} m={dark} />
+    </group>
+  )
+}
+
+function SnowflakeCharm() {
+  const ice = shine('#d8f0ff', '#7ac8ff', 0.7)
+  const silver = metal('#e8eef8')
+  return (
+    <group position={[0, 0.55, 0]}>
+      <Spin speed={0.8}>
+        <Flake len={0.42} m={ice} />
+        <Oct r={0.07} m={shine('#ffffff', '#bfe6ff', 1)} />
+      </Spin>
+      <Tor p={[0, 0.5, 0]} r={0.06} t={0.018} m={silver} />
+    </group>
+  )
+}
+
+// ---- Uncommon ----
+
+const BELL_PROFILE = [
+  [0, 0.78], [0.1, 0.77], [0.18, 0.7], [0.24, 0.56], [0.29, 0.4], [0.34, 0.26], [0.42, 0.14], [0.52, 0.02],
+].map(([r, y]) => new Vector2(r, y))
+
+function Bell({ body, trim, ribbon = true, holly = true }) {
+  const red = plastic(RED, { roughness: 0.5 })
+  const leaf = plastic(GREEN, { roughness: 0.6, side: DoubleSide })
+  return (
+    <group position={[0, 0.05, 0]}>
+      <mesh material={body}>
+        <latheGeometry args={[BELL_PROFILE, 28]} />
       </mesh>
-      <mesh position={[0, -0.4, 0]} rotation-x={Math.PI} material={nut}>
-        <coneGeometry args={[0.04, 0.08, 8]} />
-      </mesh>
-      {/* Scaly cap */}
-      <mesh position={[0, 0.2, 0]} scale={[1, 0.65, 1]} material={cap}>
-        <sphereGeometry args={[0.34, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      <mesh position={[0, 0.2, 0]} rotation-x={Math.PI / 2} material={cap}>
-        <torusGeometry args={[0.32, 0.04, 8, 28]} />
-      </mesh>
-      {[0, 1].map((row) =>
-        Array.from({ length: 12 - row * 4 }, (_, i) => {
-          const n = 12 - row * 4
-          const a = (i / n) * Math.PI * 2 + row * 0.3
-          const r = row ? 0.2 : 0.3
-          return (
-            <mesh key={`${row}-${i}`} position={[Math.cos(a) * r, 0.26 + row * 0.1, Math.sin(a) * r]} material={bump}>
-              <sphereGeometry args={[0.045, 6, 5]} />
-            </mesh>
-          )
-        }),
+      <Tor p={[0, 0.03, 0]} r={0.51} t={0.04} rot={[Math.PI / 2, 0, 0]} m={trim} />
+      <Tor p={[0, 0.5, 0]} r={0.26} t={0.025} rot={[Math.PI / 2, 0, 0]} m={trim} />
+      <Tor p={[0, 0.9, 0]} r={0.09} t={0.03} m={trim} />
+      <Sph p={[0, 0, 0]} r={0.11} m={trim} seg={12} />
+      {ribbon && (
+        <group position={[0, 0.82, 0.1]}>
+          <Sph p={[-0.09, 0, 0]} r={0.09} sc={[1.3, 0.8, 0.5]} rot={[0, 0, 0.3]} m={red} />
+          <Sph p={[0.09, 0, 0]} r={0.09} sc={[1.3, 0.8, 0.5]} rot={[0, 0, -0.3]} m={red} />
+          <Sph r={0.045} m={red} />
+        </group>
       )}
-      {/* Stem */}
-      <mesh position={[0.02, 0.48, 0]} rotation-z={-0.3} material={cap}>
-        <cylinderGeometry args={[0.025, 0.035, 0.16, 6]} />
-      </mesh>
+      {holly &&
+        [-1, 1].map((s) => (
+          <Sph key={s} p={[s * 0.1, 0.76, 0.17]} r={0.08} sc={[1.6, 0.5, 0.25]} rot={[0, 0, s * 0.5]} m={leaf} />
+        ))}
+    </group>
+  )
+}
+
+function SilverBell() {
+  return <Bell body={metal('#dfe6f2', { roughness: 0.22, side: DoubleSide })} trim={metal('#9aa8c0', { roughness: 0.3 })} />
+}
+
+function FrozenLunchbox() {
+  const blue = plastic('#3f78b8', { roughness: 0.45 })
+  const lid = plastic('#5a90cc', { roughness: 0.4 })
+  const silver = metal('#d8e0ec')
+  const frost = plastic(SNOW, { roughness: 0.95 })
+  const ice = glass(ICE, 0.8)
+  return (
+    <group rotation-y={0.4}>
+      <Box p={[0, 0.3, 0]} s={[0.95, 0.5, 0.45]} m={blue} />
+      <Box p={[0, 0.63, 0]} s={[0.97, 0.16, 0.47]} m={lid} />
+      <Box p={[0, 0.55, 0]} s={[0.98, 0.02, 0.48]} m={silver} />
+      <Tor p={[0, 0.7, 0]} r={0.16} t={0.03} arc={Math.PI} m={silver} />
+      {[-0.28, 0.28].map((x) => (
+        <Box key={x} p={[x, 0.55, 0.245]} s={[0.1, 0.12, 0.03]} m={silver} />
+      ))}
+      <Sph p={[0.25, 0.73, 0.05]} r={0.16} sc={[1.5, 0.3, 1]} m={frost} />
+      <Sph p={[-0.3, 0.72, -0.05]} r={0.1} sc={[1.4, 0.3, 1]} m={frost} />
+      {[-0.35, -0.05, 0.3].map((x, i) => (
+        <Cone key={x} p={[x, 0.46 - i * 0.02, 0.25]} r={0.03} h={0.16 + i * 0.04} rot={[Math.PI, 0, 0]} m={ice} seg={6} />
+      ))}
+    </group>
+  )
+}
+
+function ToyRobot() {
+  const red = plastic('#d8322f', { roughness: 0.4, metalness: 0.2 })
+  const gray = metal('#b8c0cc', { roughness: 0.35 })
+  const blue = plastic('#3a78d8', { roughness: 0.4 })
+  const yellow = shine('#ffd83a', '#a07a00', 0.5)
+  const dark = plastic('#22242c', { roughness: 0.5 })
+  return (
+    <group rotation-y={0.3}>
+      {[-0.14, 0.14].map((x) => (
+        <group key={x}>
+          <Box p={[x, 0.15, 0]} s={[0.14, 0.24, 0.14]} m={gray} />
+          <Box p={[x, 0.03, 0.03]} s={[0.2, 0.06, 0.24]} m={blue} />
+        </group>
+      ))}
+      <Box p={[0, 0.5, 0]} s={[0.5, 0.5, 0.35]} m={red} />
+      <Box p={[0, 0.55, 0.18]} s={[0.32, 0.22, 0.02]} m={blue} />
+      {[-0.08, 0, 0.08].map((x, i) => (
+        <Sph key={x} p={[x, 0.55, 0.2]} r={0.03} m={i === 1 ? yellow : plastic('#5af070', { emissive: '#2a9a40', emissiveIntensity: 0.6 })} seg={8} />
+      ))}
+      <Box p={[0, 0.93, 0]} s={[0.42, 0.28, 0.32]} m={gray} />
+      {[-0.1, 0.1].map((x) => (
+        <Sph key={x} p={[x, 0.97, 0.16]} r={0.055} m={yellow} seg={10} />
+      ))}
+      <Box p={[0, 0.85, 0.165]} s={[0.2, 0.04, 0.02]} m={dark} />
+      <Cyl p={[0, 1.15, 0]} t={0.015} h={0.2} m={gray} seg={6} />
+      <Sph p={[0, 1.27, 0]} r={0.045} m={red} seg={10} />
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Cyl p={[s * 0.34, 0.5, 0]} t={0.05} h={0.36} m={gray} r={[0, 0, s * 0.25]} seg={10} />
+          <Sph p={[s * 0.4, 0.32, 0]} r={0.075} m={yellow} seg={10} />
+        </group>
+      ))}
+      <Tor p={[0, 0.5, -0.22]} r={0.07} t={0.02} m={metal(GOLD)} />
+      <Box p={[0, 0.4, -0.22]} s={[0.03, 0.12, 0.02]} m={metal(GOLD)} />
+    </group>
+  )
+}
+
+function KnitScarf() {
+  const red = plastic('#c42a35', { roughness: 0.95 })
+  const white = plastic('#f4f0e8', { roughness: 0.95 })
+  return (
+    <group rotation-y={0.5}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <Tor key={i} p={[0, 0.13 + i * 0.17, 0]} r={0.36 - (i % 2) * 0.01} t={0.12} rot={[Math.PI / 2, 0, 0]} m={i % 2 ? white : red} seg={22} />
+      ))}
+      <Box p={[0.12, 0.38, 0.5]} s={[0.26, 0.7, 0.07]} m={red} />
+      {[0.55, 0.3].map((y) => (
+        <Box key={y} p={[0.12, y, 0.54]} s={[0.27, 0.07, 0.01]} m={white} />
+      ))}
+      {[-0.09, -0.03, 0.03, 0.09, 0.15, 0.21, 0.27].map((dx) => (
+        <Cyl key={dx} p={[0.12 + dx - 0.12, 0.0, 0.5]} t={0.012} h={0.1} m={red} seg={5} />
+      ))}
+    </group>
+  )
+}
+
+function IceSkates() {
+  const leather = plastic('#f4efe6', { roughness: 0.55 })
+  const silver = metal('#dde6f2', { roughness: 0.2 })
+  const red = plastic('#d8322f', { roughness: 0.5 })
+  const fur = plastic(SNOW, { roughness: 1 })
+  return (
+    <group rotation-y={0.6}>
+      <Box p={[0, 0.1, 0.02]} s={[0.04, 0.2, 0.95]} m={silver} />
+      <Box p={[0, 0.2, 0.02]} s={[0.34, 0.06, 0.82]} m={plastic('#2c2a30')} />
+      <Box p={[0, 0.4, -0.2]} s={[0.34, 0.34, 0.4]} m={leather} />
+      <Sph p={[0, 0.38, 0.26]} r={0.22} sc={[0.95, 0.8, 1.25]} m={leather} />
+      <Cyl p={[0, 0.65, -0.17]} t={0.17} b={0.2} h={0.6} m={leather} seg={16} />
+      <Tor p={[0, 0.95, -0.17]} r={0.18} t={0.06} rot={[Math.PI / 2, 0, 0]} m={fur} />
+      {[0.5, 0.62, 0.74, 0.86].map((y) => (
+        <Box key={y} p={[0, y, 0.03]} s={[0.22, 0.025, 0.02]} m={red} />
+      ))}
+      <Box p={[0, 0.17, 0.5]} s={[0.04, 0.12, 0.15]} m={silver} r={[-0.5, 0, 0]} />
+    </group>
+  )
+}
+
+function ThermosFlask() {
+  const red = plastic('#d83a35', { roughness: 0.3, metalness: 0.3 })
+  const silver = metal('#dde4ee')
+  const white = plastic('#fbfbfb', { roughness: 0.35 })
+  return (
+    <group>
+      <Cyl p={[0, 0.06, 0]} t={0.23} h={0.1} m={plastic('#2c2a30')} />
+      <Cyl p={[0, 0.5, 0]} t={0.22} h={0.85} m={red} />
+      <Cyl p={[0, 0.35, 0]} t={0.225} h={0.07} m={white} />
+      <Cyl p={[0, 0.55, 0]} t={0.225} h={0.07} m={white} />
+      <Cyl p={[0, 1.0, 0]} t={0.24} h={0.22} m={silver} />
+      <Tor p={[0, 0.9, 0]} r={0.235} t={0.02} rot={[Math.PI / 2, 0, 0]} m={silver} />
+      <Cyl p={[0, 1.14, 0]} t={0.1} h={0.08} m={red} seg={12} />
+      <Tor p={[0.22, 0.65, 0]} r={0.16} t={0.025} arc={Math.PI} rot={[0, 0, -Math.PI / 2]} m={plastic('#2c2a30')} />
+      <Sph p={[0.05, 1.15, 0.05]} r={0.1} sc={[1.2, 0.4, 1]} m={plastic(SNOW, { roughness: 1 })} />
+    </group>
+  )
+}
+
+function GingerbreadMan() {
+  const brown = plastic('#b3702f', { roughness: 0.8 })
+  const icing = plastic('#fffaf0', { roughness: 0.6 })
+  const black = plastic('#2a1a10')
+  const gum = [plastic(RED, { roughness: 0.4 }), plastic('#2fa84a', { roughness: 0.4 })]
+  return (
+    <group rotation-y={0.35}>
+      <Sph p={[0, 0.66, 0]} r={0.3} sc={[1, 1.15, 0.35]} m={brown} />
+      <Sph p={[0, 1.0, 0]} r={0.2} sc={[1, 1, 0.5]} m={brown} />
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Box p={[s * 0.4, 0.78, 0]} s={[0.38, 0.15, 0.13]} r={[0, 0, s * 0.45]} m={brown} />
+          <Sph p={[s * 0.56, 0.9, 0]} r={0.09} sc={[1, 1, 0.7]} m={brown} />
+          <Box p={[s * 0.52, 0.87, 0]} s={[0.07, 0.16, 0.14]} r={[0, 0, s * 0.45]} m={icing} />
+          <Box p={[s * 0.15, 0.22, 0]} s={[0.17, 0.42, 0.13]} r={[0, 0, s * 0.18]} m={brown} />
+          <Sph p={[s * 0.19, 0.04, 0]} r={0.1} sc={[1.2, 0.8, 0.7]} m={brown} />
+          <Box p={[s * 0.18, 0.07, 0]} s={[0.19, 0.06, 0.14]} m={icing} />
+        </group>
+      ))}
+      {[-0.07, 0.07].map((x) => (
+        <Sph key={x} p={[x, 1.04, 0.1]} r={0.025} m={black} seg={8} />
+      ))}
+      <Tor p={[0, 0.98, 0.1]} r={0.07} t={0.012} arc={Math.PI} rot={[0, 0, Math.PI]} m={icing} />
+      {[0.78, 0.66, 0.54].map((y, i) => (
+        <Sph key={y} p={[0, y, 0.11]} r={0.035} m={gum[i % 2]} seg={10} />
+      ))}
+      <Tor p={[0, 0.88, 0.1]} r={0.1} t={0.012} arc={Math.PI} rot={[0, 0, Math.PI]} m={icing} />
+    </group>
+  )
+}
+
+function SledRunner() {
+  const wood = plastic(WOOD, { roughness: 0.75 })
+  const light = plastic('#b07a45', { roughness: 0.75 })
+  const steel = metal('#c8d0dc', { roughness: 0.25 })
+  const red = plastic(RED, { roughness: 0.6 })
+  const snow = plastic(SNOW, { roughness: 1 })
+  return (
+    <group rotation-y={0.5}>
+      {[-0.36, -0.12, 0.12, 0.36].map((z, i) => (
+        <Box key={z} p={[0, 0.3, z]} s={[0.72, 0.05, 0.19]} m={i % 2 ? wood : light} />
+      ))}
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Box p={[s * 0.3, 0.06, -0.05]} s={[0.05, 0.05, 1.1]} m={steel} />
+          <Box p={[s * 0.3, 0.16, 0.62]} s={[0.05, 0.05, 0.28]} r={[-0.8, 0, 0]} m={steel} />
+          {[-0.3, 0.3].map((z) => (
+            <Box key={z} p={[s * 0.3, 0.18, z]} s={[0.05, 0.24, 0.05]} m={steel} />
+          ))}
+        </group>
+      ))}
+      <Tor p={[0, 0.32, 0.72]} r={0.12} t={0.02} rot={[Math.PI / 2, 0, 0]} m={red} />
+      <Sph p={[0.1, 0.35, -0.1]} r={0.14} sc={[1.6, 0.3, 1.2]} m={snow} />
     </group>
   )
 }
@@ -1572,7 +561,7 @@ function Pinecone() {
   const core = plastic('#5a3a1e', { roughness: 0.9 })
   const layers = 8
   return (
-    <group position={[0, -0.45, 0]}>
+    <group position={[0, 0, 0]}>
       <mesh position={[0, 0.45, 0]} material={core}>
         <cylinderGeometry args={[0.06, 0.1, 0.9, 8]} />
       </mesh>
@@ -1596,615 +585,6 @@ function Pinecone() {
       <mesh position={[0, 0.98, 0]} material={core}>
         <cylinderGeometry args={[0.02, 0.03, 0.12, 6]} />
       </mesh>
-    </group>
-  )
-}
-
-function OldBoot() {
-  const leather = plastic('#6a4428', { roughness: 0.85 })
-  const worn = plastic('#8a5e3a', { roughness: 0.9 })
-  const sole = plastic('#2a1e16', { roughness: 0.95 })
-  const lace = plastic('#d8c8a0', { roughness: 0.8 })
-  const hole = plastic('#0a0806')
-  return (
-    <group position={[0, -0.4, 0]} rotation-y={0.4}>
-      {/* Sole and heel */}
-      <mesh position={[0, 0.03, 0.05]} material={sole}>
-        <boxGeometry args={[0.34, 0.06, 0.8]} />
-      </mesh>
-      <mesh position={[0, 0.08, -0.27]} material={sole}>
-        <boxGeometry args={[0.32, 0.08, 0.22]} />
-      </mesh>
-      {/* Foot and toe cap */}
-      <mesh position={[0, 0.17, 0.12]} scale={[0.17, 0.13, 0.32]} material={leather}>
-        <sphereGeometry args={[1, 18, 12]} />
-      </mesh>
-      <mesh position={[0, 0.15, 0.3]} scale={[0.15, 0.1, 0.14]} material={worn}>
-        <sphereGeometry args={[1, 14, 10]} />
-      </mesh>
-      {/* Shaft, slumped a little, with a folded cuff */}
-      <mesh position={[0, 0.45, -0.17]} rotation-x={-0.1} material={leather}>
-        <cylinderGeometry args={[0.17, 0.18, 0.62, 16]} />
-      </mesh>
-      <mesh position={[0, 0.76, -0.2]} rotation-x={Math.PI / 2 - 0.1} material={worn}>
-        <torusGeometry args={[0.17, 0.035, 8, 20]} />
-      </mesh>
-      {/* Criss-cross laces up the front */}
-      {[0.28, 0.4, 0.52, 0.64].map((y, i) => (
-        <mesh key={i} position={[0, y, -0.0 + i * -0.01]} rotation-z={i % 2 ? 0.5 : -0.5} material={lace}>
-          <boxGeometry args={[0.2, 0.02, 0.02]} />
-        </mesh>
-      ))}
-      {/* Hole worn through the toe and a patch on the side */}
-      <mesh position={[0.05, 0.2, 0.42]} rotation-x={0.4} material={hole}>
-        <circleGeometry args={[0.04, 10]} />
-      </mesh>
-      <mesh position={[0.18, 0.4, -0.16]} rotation-y={Math.PI / 2} material={worn}>
-        <boxGeometry args={[0.14, 0.12, 0.01]} />
-      </mesh>
-    </group>
-  )
-}
-
-// ---- Uncommon ----
-
-function Compass() {
-  const brass = metal('#c9973a')
-  const face = plastic('#f6efd8', { roughness: 0.6 })
-  const ink = plastic('#2a2218')
-  const red = shine('#e0281e', '#a00000', 0.4)
-  const glass = plastic('#cfefff', { transparent: true, opacity: 0.25, roughness: 0.05 })
-  return (
-    <group rotation-x={0.9}>
-      <mesh material={brass}>
-        <cylinderGeometry args={[0.42, 0.44, 0.12, 32]} />
-      </mesh>
-      <mesh position={[0, 0.065, 0]} rotation-x={Math.PI / 2} material={brass}>
-        <torusGeometry args={[0.41, 0.03, 8, 32]} />
-      </mesh>
-      <mesh position={[0, 0.062, 0]} rotation-x={-Math.PI / 2} material={face}>
-        <circleGeometry args={[0.37, 32]} />
-      </mesh>
-      {/* 16 ticks, the four cardinal ones long */}
-      {Array.from({ length: 16 }, (_, i) => {
-        const a = (i / 16) * Math.PI * 2
-        const long = i % 4 === 0
-        return (
-          <mesh key={i} position={[Math.sin(a) * 0.31, 0.066, Math.cos(a) * 0.31]} rotation-y={a} material={ink}>
-            <boxGeometry args={[0.015, 0.004, long ? 0.1 : 0.05]} />
-          </mesh>
-        )
-      })}
-      {/* Needle: red north, white south */}
-      <group position={[0, 0.075, 0]} rotation-y={0.5}>
-        <mesh position={[0, 0, -0.13]} rotation-x={-Math.PI / 2} scale={[1, 1, 0.3]} material={red}>
-          <coneGeometry args={[0.045, 0.26, 4]} />
-        </mesh>
-        <mesh position={[0, 0, 0.13]} rotation-x={Math.PI / 2} scale={[1, 1, 0.3]} material={face}>
-          <coneGeometry args={[0.045, 0.26, 4]} />
-        </mesh>
-        <mesh material={brass}>
-          <cylinderGeometry args={[0.03, 0.03, 0.03, 10]} />
-        </mesh>
-      </group>
-      <mesh position={[0, 0.07, 0]} scale={[1, 0.18, 1]} material={glass}>
-        <sphereGeometry args={[0.38, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      {/* Hanging bow */}
-      <mesh position={[0, 0, -0.5]} rotation-x={Math.PI / 2} material={brass}>
-        <torusGeometry args={[0.07, 0.022, 8, 16]} />
-      </mesh>
-    </group>
-  )
-}
-
-function SilverKey() {
-  const silver = metal('#d8dde6', { roughness: 0.2 })
-  const blue = shine('#5ab0ff', '#2a7aff', 0.6)
-  return (
-    <group rotation-z={0.35}>
-      {/* Ornate bow: big ring with a cross of bars and a gem */}
-      <mesh position={[0, 0.42, 0]} material={silver}>
-        <torusGeometry args={[0.17, 0.035, 10, 28]} />
-      </mesh>
-      {[0, Math.PI / 2].map((r) => (
-        <mesh key={r} position={[0, 0.42, 0]} rotation-z={r} material={silver}>
-          <boxGeometry args={[0.32, 0.025, 0.025]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.42, 0]} material={blue}>
-        <sphereGeometry args={[0.055, 12, 10]} />
-      </mesh>
-      {/* Collar rings and shaft */}
-      {[0.22, 0.17].map((y) => (
-        <mesh key={y} position={[0, y, 0]} rotation-x={Math.PI / 2} material={silver}>
-          <torusGeometry args={[0.04, 0.015, 6, 14]} />
-        </mesh>
-      ))}
-      <mesh position={[0, -0.12, 0]} material={silver}>
-        <cylinderGeometry args={[0.03, 0.03, 0.72, 10]} />
-      </mesh>
-      {/* Bit with teeth */}
-      <mesh position={[0.08, -0.38, 0]} material={silver}>
-        <boxGeometry args={[0.14, 0.2, 0.03]} />
-      </mesh>
-      {[[0.17, -0.32], [0.17, -0.43]].map(([x, y], i) => (
-        <mesh key={i} position={[x, y, 0]} material={silver}>
-          <boxGeometry args={[0.05, 0.05, 0.03]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-// ---- Rare ----
-
-function CrystalBall() {
-  const glass = shine('#c8b0ff', '#7a3aff', 0.35, { transparent: true, opacity: 0.45, roughness: 0.05 })
-  const mist = shine('#e0c8ff', '#b06aff', 1.2, { transparent: true, opacity: 0.7 })
-  const gold = metal('#d9a82b')
-  const wood = plastic('#3a2416', { roughness: 0.6 })
-  return (
-    <group position={[0, -0.1, 0]}>
-      <mesh position={[0, 0.3, 0]} material={glass}>
-        <sphereGeometry args={[0.36, 32, 24]} />
-      </mesh>
-      {/* Swirling mist inside */}
-      <Spin speed={1.5} position={[0, 0.3, 0]}>
-        <mesh rotation-x={0.6} material={mist}>
-          <torusGeometry args={[0.15, 0.03, 8, 24]} />
-        </mesh>
-        <mesh rotation-z={0.9} material={mist}>
-          <torusGeometry args={[0.1, 0.025, 8, 20]} />
-        </mesh>
-        <mesh material={mist}>
-          <sphereGeometry args={[0.06, 12, 10]} />
-        </mesh>
-      </Spin>
-      {/* Stand: wooden base, gold ring and three claws */}
-      <mesh position={[0, -0.22, 0]} material={wood}>
-        <cylinderGeometry args={[0.24, 0.3, 0.14, 20]} />
-      </mesh>
-      <mesh position={[0, -0.08, 0]} material={gold}>
-        <cylinderGeometry args={[0.2, 0.22, 0.12, 20]} />
-      </mesh>
-      {[0, 1, 2].map((i) => {
-        const a = (i / 3) * Math.PI * 2
-        return (
-          <group key={i} rotation-y={a}>
-            <mesh position={[0.24, 0.05, 0]} rotation-z={0.5} material={gold}>
-              <coneGeometry args={[0.04, 0.3, 6]} />
-            </mesh>
-          </group>
-        )
-      })}
-    </group>
-  )
-}
-
-function AncientScroll() {
-  const paper = plastic('#e8d4a2', { roughness: 0.9, side: DoubleSide })
-  const roll = plastic('#d8c08a', { roughness: 0.85 })
-  const wood = plastic('#5a3820', { roughness: 0.6 })
-  const ink = plastic('#3a2a1a')
-  const wax = shine('#b01818', '#600000', 0.3, { roughness: 0.4 })
-  return (
-    <group rotation={[0.2, 0, 0.1]}>
-      {/* Two rolls with the open sheet stretched between them */}
-      {[0.38, -0.38].map((y) => (
-        <group key={y} position={[0, y, 0]}>
-          <mesh rotation-z={Math.PI / 2} material={roll}>
-            <cylinderGeometry args={[0.1, 0.1, 0.78, 16]} />
-          </mesh>
-          {[-1, 1].map((s) => (
-            <group key={s}>
-              <mesh position={[s * 0.44, 0, 0]} rotation-z={Math.PI / 2} material={wood}>
-                <cylinderGeometry args={[0.035, 0.035, 0.12, 8]} />
-              </mesh>
-              <mesh position={[s * 0.52, 0, 0]} material={wood}>
-                <sphereGeometry args={[0.055, 10, 8]} />
-              </mesh>
-            </group>
-          ))}
-        </group>
-      ))}
-      <mesh position={[0, 0, 0.06]} material={paper}>
-        <boxGeometry args={[0.72, 0.74, 0.01]} />
-      </mesh>
-      {/* Lines of faded writing */}
-      {[0.2, 0.12, 0.04, -0.04, -0.12, -0.2].map((y, i) => (
-        <mesh key={y} position={[i % 3 === 2 ? -0.08 : 0, y, 0.068]} material={ink}>
-          <boxGeometry args={[i % 3 === 2 ? 0.4 : 0.56, 0.018, 0.002]} />
-        </mesh>
-      ))}
-      {/* Wax seal */}
-      <mesh position={[0.2, -0.28, 0.072]} rotation-x={Math.PI / 2} material={wax}>
-        <cylinderGeometry args={[0.065, 0.07, 0.02, 14]} />
-      </mesh>
-    </group>
-  )
-}
-
-function GoldenRing() {
-  const gold = metal('#f2c230', { roughness: 0.2, emissive: '#6a4000', emissiveIntensity: 0.2 })
-  const diamond = shine('#f4fbff', '#bfe4ff', 0.6, { roughness: 0.05, flatShading: true })
-  return (
-    <group position={[0, -0.1, 0]}>
-      <mesh material={gold}>
-        <torusGeometry args={[0.32, 0.055, 14, 40]} />
-      </mesh>
-      {/* Setting: cup plus four prongs holding the stone */}
-      <mesh position={[0, 0.38, 0]} material={gold}>
-        <cylinderGeometry args={[0.1, 0.06, 0.1, 12]} />
-      </mesh>
-      {[0, 1, 2, 3].map((i) => {
-        const a = (i / 4) * Math.PI * 2 + Math.PI / 4
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.11, 0.48, Math.sin(a) * 0.11]} material={gold}>
-            <boxGeometry args={[0.025, 0.12, 0.025]} />
-          </mesh>
-        )
-      })}
-      <group position={[0, 0.52, 0]}>
-        <CutGem mats={diamond} r={0.13} crown={0.06} pavilion={0.12} />
-      </group>
-    </group>
-  )
-}
-
-function Ruby() {
-  const ruby = shine('#ff2244', '#c0001a', 0.55, { roughness: 0.08, flatShading: true })
-  const pale = shine('#ff8aa0', '#ff2a4a', 0.8, { roughness: 0.08, flatShading: true })
-  return (
-    <group rotation={[0.5, 0, 0.25]}>
-      <CutGem mats={[ruby, pale]} r={0.42} crown={0.16} pavilion={0.44} seg={10} />
-    </group>
-  )
-}
-
-function Sapphire() {
-  const sapphire = shine('#1a4aff', '#0a2acc', 0.55, { roughness: 0.08, flatShading: true })
-  const pale = shine('#6a9aff', '#2a5aff', 0.8, { roughness: 0.08, flatShading: true })
-  const silver = metal('#d8dde6')
-  return (
-    <group rotation={[0.55, 0, -0.2]}>
-      {/* Oval cut in a thin silver bezel */}
-      <group scale={[1.25, 1, 0.85]}>
-        <CutGem mats={[sapphire, pale]} r={0.36} crown={0.14} pavilion={0.38} seg={12} />
-        <mesh position={[0, 0, 0]} rotation-x={Math.PI / 2} material={silver}>
-          <torusGeometry args={[0.37, 0.025, 6, 36]} />
-        </mesh>
-      </group>
-    </group>
-  )
-}
-
-function PocketWatch() {
-  const gold = metal('#e8b830', { roughness: 0.25 })
-  const face = plastic('#fbf7ea', { roughness: 0.5 })
-  const ink = plastic('#1a1a1a')
-  const glass = plastic('#dff4ff', { transparent: true, opacity: 0.2, roughness: 0.05 })
-  return (
-    <group rotation-x={-0.15}>
-      <mesh rotation-x={Math.PI / 2} material={gold}>
-        <cylinderGeometry args={[0.38, 0.38, 0.12, 36]} />
-      </mesh>
-      <mesh position={[0, 0, 0.06]} material={gold}>
-        <torusGeometry args={[0.36, 0.03, 8, 36]} />
-      </mesh>
-      <mesh position={[0, 0, 0.062]} material={face}>
-        <circleGeometry args={[0.34, 36]} />
-      </mesh>
-      {/* Hour marks, numerals at 12/3/6/9 drawn as thicker bars */}
-      {Array.from({ length: 12 }, (_, i) => {
-        const a = (i / 12) * Math.PI * 2
-        const big = i % 3 === 0
-        return (
-          <mesh key={i} position={[Math.sin(a) * 0.28, Math.cos(a) * 0.28, 0.065]} rotation-z={-a} material={ink}>
-            <boxGeometry args={[big ? 0.03 : 0.015, big ? 0.07 : 0.045, 0.004]} />
-          </mesh>
-        )
-      })}
-      {/* Hands */}
-      <mesh position={[0.05, 0.06, 0.07]} rotation-z={-0.7} material={ink}>
-        <boxGeometry args={[0.02, 0.16, 0.004]} />
-      </mesh>
-      <mesh position={[-0.08, 0.06, 0.072]} rotation-z={0.9} material={ink}>
-        <boxGeometry args={[0.014, 0.22, 0.004]} />
-      </mesh>
-      <mesh position={[0, 0, 0.075]} rotation-x={Math.PI / 2} material={gold}>
-        <cylinderGeometry args={[0.02, 0.02, 0.01, 10]} />
-      </mesh>
-      <mesh position={[0, 0, 0.07]} scale={[1, 1, 0.15]} material={glass}>
-        <sphereGeometry args={[0.34, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      {/* Crown and bow on top */}
-      <mesh position={[0, 0.43, 0]} material={gold}>
-        <cylinderGeometry args={[0.04, 0.04, 0.08, 12]} />
-      </mesh>
-      <mesh position={[0, 0.53, 0]} rotation-y={Math.PI / 2} material={gold}>
-        <torusGeometry args={[0.07, 0.018, 8, 18]} />
-      </mesh>
-      {/* Chain drooping off to the side */}
-      {Array.from({ length: 8 }, (_, i) => {
-        const t = i / 7
-        return (
-          <mesh
-            key={i}
-            position={[0.08 + t * 0.45, 0.58 - Math.sin(t * Math.PI) * 0.35 - t * 0.2, 0]}
-            rotation={[i % 2 ? Math.PI / 2 : 0, 0, t * 1.2]}
-            material={gold}
-          >
-            <torusGeometry args={[0.035, 0.012, 6, 12]} />
-          </mesh>
-        )
-      })}
-    </group>
-  )
-}
-
-// ---- Celestial ----
-
-function Excalibur() {
-  const steel = shine('#e8f4ff', '#7ac8ff', 0.35, { metalness: 0.85, roughness: 0.15 })
-  const fuller = metal('#9ab0c8')
-  const gold = metal('#f2c230')
-  const grip = plastic('#1a3a8a', { roughness: 0.6 })
-  const gem = shine('#3aa0ff', '#1060ff', 1)
-  const rock = plastic('#7a7a80', { roughness: 0.95, flatShading: true })
-  const moss = plastic('#4a7a3a', { roughness: 1, flatShading: true })
-  return (
-    <group position={[0, -0.45, 0]}>
-      {/* The stone it's drawn from */}
-      <mesh position={[0, 0.08, 0]} scale={[1, 0.5, 0.85]} material={rock}>
-        <dodecahedronGeometry args={[0.38, 0]} />
-      </mesh>
-      <mesh position={[0.15, 0.2, 0.15]} scale={[1, 0.3, 1]} material={moss}>
-        <dodecahedronGeometry args={[0.12, 0]} />
-      </mesh>
-      {/* Blade, fuller and point */}
-      <mesh position={[0, 0.65, 0]} material={steel}>
-        <boxGeometry args={[0.11, 0.9, 0.03]} />
-      </mesh>
-      <mesh position={[0, 0.65, 0.016]} material={fuller}>
-        <boxGeometry args={[0.025, 0.8, 0.005]} />
-      </mesh>
-      {/* Crossguard with curled ends */}
-      <mesh position={[0, 1.12, 0]} material={gold}>
-        <boxGeometry args={[0.46, 0.06, 0.08]} />
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.25, 1.15, 0]} material={gold}>
-          <sphereGeometry args={[0.045, 10, 8]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 1.12, 0.045]} material={gem}>
-        <octahedronGeometry args={[0.045, 0]} />
-      </mesh>
-      {/* Wrapped grip and pommel */}
-      <mesh position={[0, 1.3, 0]} material={grip}>
-        <cylinderGeometry args={[0.035, 0.04, 0.3, 10]} />
-      </mesh>
-      {[1.2, 1.27, 1.34, 1.41].map((y) => (
-        <mesh key={y} position={[0, y, 0]} rotation-x={Math.PI / 2} material={gold}>
-          <torusGeometry args={[0.04, 0.008, 6, 14]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 1.5, 0]} material={gold}>
-        <sphereGeometry args={[0.065, 14, 10]} />
-      </mesh>
-      <mesh position={[0, 1.5, 0.05]} material={gem}>
-        <sphereGeometry args={[0.03, 10, 8]} />
-      </mesh>
-    </group>
-  )
-}
-
-function AncientDragonSkull() {
-  const bone = plastic('#e4d8b8', { roughness: 0.7 })
-  const dark = plastic('#b8a882', { roughness: 0.8 })
-  const socket = plastic('#120a1a')
-  const eye = shine('#c06aff', '#9a2aff', 1.6)
-  const tooth = plastic('#fffaf0', { roughness: 0.4 })
-  return (
-    <group position={[0, 0, -0.1]}>
-      {/* Cranium and long snout */}
-      <mesh scale={[0.36, 0.3, 0.42]} material={bone}>
-        <sphereGeometry args={[1, 20, 16]} />
-      </mesh>
-      <mesh position={[0, -0.05, 0.48]} rotation-x={Math.PI / 2} scale={[1, 1, 0.65]} material={bone}>
-        <cylinderGeometry args={[0.2, 0.12, 0.6, 12]} />
-      </mesh>
-      {/* Brow ridges and glowing sockets */}
-      {[-1, 1].map((s) => (
-        <group key={s}>
-          <mesh position={[s * 0.17, 0.1, 0.3]} rotation-z={s * 0.4} scale={[1, 0.45, 0.6]} material={dark}>
-            <sphereGeometry args={[0.12, 12, 8]} />
-          </mesh>
-          <mesh position={[s * 0.17, 0.03, 0.31]} material={socket}>
-            <sphereGeometry args={[0.08, 12, 10]} />
-          </mesh>
-          <mesh position={[s * 0.17, 0.03, 0.36]} material={eye}>
-            <sphereGeometry args={[0.035, 10, 8]} />
-          </mesh>
-          {/* Nostril */}
-          <mesh position={[s * 0.06, 0.04, 0.78]} material={socket}>
-            <sphereGeometry args={[0.03, 8, 6]} />
-          </mesh>
-          {/* Swept-back horns, built from tapering segments */}
-          {[0, 1, 2, 3].map((k) => (
-            <mesh
-              key={k}
-              position={[s * (0.22 + k * 0.05), 0.18 + k * 0.06 - k * k * 0.012, -0.25 - k * 0.16]}
-              rotation={[-1.2 + k * 0.25, 0, -s * 0.35]}
-              material={k % 2 ? dark : bone}
-            >
-              <coneGeometry args={[0.075 - k * 0.015, 0.2, 8]} />
-            </mesh>
-          ))}
-        </group>
-      ))}
-      {/* Upper teeth */}
-      {[-1, 1].map((s) =>
-        [0.3, 0.42, 0.54, 0.66].map((z, k) => (
-          <mesh key={`${s}${k}`} position={[s * (0.15 - k * 0.015), -0.2, z]} rotation-x={Math.PI} material={tooth}>
-            <coneGeometry args={[0.025, k === 0 ? 0.14 : 0.08, 6]} />
-          </mesh>
-        )),
-      )}
-      {/* Lower jaw hanging slightly open */}
-      <mesh position={[0, -0.3, 0.36]} rotation-x={0.18} scale={[1, 0.4, 1]} material={dark}>
-        <boxGeometry args={[0.32, 0.18, 0.6]} />
-      </mesh>
-    </group>
-  )
-}
-
-function VoidOrb() {
-  const core = plastic('#05020c', { roughness: 0.05, metalness: 0.9, emissive: '#1a0030', emissiveIntensity: 0.6 })
-  const shell = shine('#6a2aff', '#5a00ff', 0.6, { transparent: true, opacity: 0.25, depthWrite: false })
-  const ring = shine('#c06aff', '#a020ff', 1.3)
-  const ring2 = shine('#ff4ad8', '#ff00c0', 1.1)
-  const mote = shine('#e8d0ff', '#c08aff', 1.5)
-  return (
-    <group>
-      <mesh material={core}>
-        <sphereGeometry args={[0.3, 32, 24]} />
-      </mesh>
-      <mesh material={shell}>
-        <sphereGeometry args={[0.4, 28, 20]} />
-      </mesh>
-      {/* Event-horizon rings */}
-      <Spin speed={1.2} rotation-x={1.2}>
-        <mesh material={ring}>
-          <torusGeometry args={[0.5, 0.02, 8, 48]} />
-        </mesh>
-      </Spin>
-      <Spin speed={-0.9} rotation={[0.4, 0, 0.9]}>
-        <mesh material={ring2}>
-          <torusGeometry args={[0.58, 0.014, 8, 48]} />
-        </mesh>
-      </Spin>
-      {/* Matter being pulled in */}
-      <Spin speed={2}>
-        {Array.from({ length: 7 }, (_, i) => {
-          const a = (i / 7) * Math.PI * 2
-          const r = 0.45 + (i % 3) * 0.08
-          return (
-            <mesh key={i} position={[Math.cos(a) * r, Math.sin(a * 2) * 0.12, Math.sin(a) * r]} material={mote}>
-              <sphereGeometry args={[0.025 + (i % 2) * 0.012, 8, 6]} />
-            </mesh>
-          )
-        })}
-      </Spin>
-    </group>
-  )
-}
-
-const RAINBOW = ['#ff3a3a', '#ff9a2a', '#ffe83a', '#4aff6a', '#3ad8ff', '#3a6aff', '#a04aff', '#ff4ac8']
-
-function RainbowDiamond() {
-  const mats = RAINBOW.map((c) => shine(c, c, 0.6, { roughness: 0.05, metalness: 0.2, flatShading: true }))
-  const sparkle = shine('#ffffff', '#ffffff', 1.5)
-  return (
-    <group>
-      <Spin speed={0.6}>
-        <group rotation-x={0.35}>
-          <CutGem mats={mats} r={0.45} crown={0.18} pavilion={0.5} table={0.5} seg={8} />
-        </group>
-      </Spin>
-      <Sparkles
-        mat={sparkle}
-        spots={[[0.5, 0.25, 0.1], [-0.45, 0.3, -0.15], [0.2, 0.45, -0.3], [-0.3, -0.25, 0.3], [0.4, -0.2, -0.25]]}
-      />
-    </group>
-  )
-}
-
-function AstralBlade() {
-  const blade = shine('#9ae8ff', '#3ab8ff', 1, { transparent: true, opacity: 0.85 })
-  const edge = shine('#e0d0ff', '#a06aff', 1.3)
-  const gold = metal('#f2d060', { emissive: '#8a6a00', emissiveIntensity: 0.3 })
-  const grip = plastic('#1a1440', { roughness: 0.5 })
-  const star = shine('#fff6c0', '#ffe060', 1.5)
-  const segs = 6
-  return (
-    <group position={[0, -0.55, 0]} rotation-z={0.15}>
-      {/* Curved blade from short angled segments */}
-      {Array.from({ length: segs }, (_, i) => {
-        const t = i / segs
-        const bend = t * t * 0.35
-        return (
-          <group key={i} position={[bend, 0.42 + i * 0.15, 0]} rotation-z={-t * 0.5}>
-            <mesh material={blade}>
-              <boxGeometry args={[0.13 - t * 0.05, 0.16, 0.025]} />
-            </mesh>
-            <mesh position={[0.065 - t * 0.025, 0, 0]} material={edge}>
-              <boxGeometry args={[0.012, 0.16, 0.03]} />
-            </mesh>
-          </group>
-        )
-      })}
-      <mesh position={[0.38, 1.33, 0]} rotation-z={-0.55} scale={[1, 1, 0.25]} material={edge}>
-        <coneGeometry args={[0.045, 0.18, 4]} />
-      </mesh>
-      {/* Crescent-moon guard with a star at its heart */}
-      <mesh position={[0, 0.32, 0]} rotation-z={Math.PI} material={gold}>
-        <torusGeometry args={[0.2, 0.035, 8, 24, Math.PI]} />
-      </mesh>
-      <mesh position={[0, 0.32, 0.03]} material={star}>
-        <octahedronGeometry args={[0.07, 0]} />
-      </mesh>
-      <mesh position={[0, 0.12, 0]} material={grip}>
-        <cylinderGeometry args={[0.035, 0.04, 0.32, 10]} />
-      </mesh>
-      <mesh position={[0, -0.07, 0]} material={gold}>
-        <octahedronGeometry args={[0.06, 0]} />
-      </mesh>
-      {/* Stardust trailing the blade */}
-      <Sparkles mat={star} spots={[[-0.15, 0.9, 0.05], [0.5, 0.8, -0.05], [-0.08, 1.3, 0], [0.6, 1.2, 0.08], [0.15, 1.5, 0]]} size={0.03} />
-    </group>
-  )
-}
-
-function GalaxyPearl() {
-  const pearl = shine('#f0e4ff', '#8a5aff', 0.35, { roughness: 0.12, metalness: 0.35 })
-  const shellIn = plastic('#ffe8f4', { roughness: 0.25, metalness: 0.3, side: DoubleSide })
-  const shellOut = plastic('#3a2a6a', { roughness: 0.6 })
-  const blue = shine('#7ad0ff', '#3aa8ff', 1.4)
-  const pink = shine('#ff9ae0', '#ff4ac0', 1.4)
-  const arms = 2
-  const dots = 12
-  return (
-    <group position={[0, -0.1, 0]}>
-      {/* Open clam it rests in */}
-      <mesh position={[0, -0.15, 0]} scale={[1, 0.35, 0.9]} material={shellOut}>
-        <sphereGeometry args={[0.45, 24, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2]} />
-      </mesh>
-      <mesh position={[0, -0.15, 0]} rotation-x={Math.PI} scale={[0.96, 0.3, 0.86]} material={shellIn}>
-        <sphereGeometry args={[0.45, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      <mesh position={[0, 0.0, -0.32]} rotation-x={-1.1} scale={[1, 0.35, 0.9]} material={shellOut}>
-        <sphereGeometry args={[0.45, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      <mesh position={[0, 0.08, 0]} material={pearl}>
-        <sphereGeometry args={[0.24, 28, 20]} />
-      </mesh>
-      {/* Spiral galaxy arms swirling round it */}
-      <Spin speed={0.8} position={[0, 0.08, 0]} rotation-x={0.35}>
-        {Array.from({ length: arms }, (_, a) =>
-          Array.from({ length: dots }, (_, i) => {
-            const t = i / dots
-            const ang = a * Math.PI + t * Math.PI * 1.6
-            const r = 0.3 + t * 0.25
-            return (
-              <mesh key={`${a}-${i}`} position={[Math.cos(ang) * r, 0, Math.sin(ang) * r]} material={i % 2 ? blue : pink}>
-                <sphereGeometry args={[0.03 - t * 0.015, 8, 6]} />
-              </mesh>
-            )
-          }),
-        )}
-      </Spin>
     </group>
   )
 }
@@ -2250,344 +630,1294 @@ function AuroraVeil() {
   )
 }
 
-// ---- Divine ----
+// ---- Rare ----
 
-function GoldenRocket() {
-  const gold = metal('#f6c830', { roughness: 0.2, emissive: '#7a5000', emissiveIntensity: 0.3 })
-  const red = shine('#e02a2a', '#a00000', 0.3, { metalness: 0.4 })
-  const porthole = shine('#7ad8ff', '#3aa8ff', 0.8)
-  const flame = shine('#ffb030', '#ff6a00', 1.4, { transparent: true, opacity: 0.9 })
-  const core = shine('#fff6c0', '#ffffff', 1.6)
+function GiftBox() {
+  const paper = plastic('#d8322f', { roughness: 0.45 })
+  const ribbon = plastic('#ffe27a', { roughness: 0.3, metalness: 0.4 })
+  const white = plastic(SNOW, { roughness: 1 })
   return (
-    <group rotation-z={0.35} position={[0, -0.05, 0]}>
-      <mesh position={[0, 0.05, 0]} material={gold}>
-        <cylinderGeometry args={[0.2, 0.22, 0.7, 24]} />
-      </mesh>
-      <mesh position={[0, 0.58, 0]} material={red}>
-        <coneGeometry args={[0.2, 0.36, 24]} />
-      </mesh>
-      {[0.36, -0.22].map((y) => (
-        <mesh key={y} position={[0, y, 0]} rotation-x={Math.PI / 2} material={red}>
-          <torusGeometry args={[0.205, 0.02, 8, 24]} />
-        </mesh>
+    <group rotation-y={0.4}>
+      <Box p={[0, 0.35, 0]} s={[0.7, 0.7, 0.7]} m={paper} />
+      <Box p={[0, 0.35, 0]} s={[0.12, 0.72, 0.72]} m={ribbon} />
+      <Box p={[0, 0.35, 0]} s={[0.72, 0.72, 0.12]} m={ribbon} />
+      {[-1, 1].map((s) => (
+        <Tor key={s} p={[s * 0.12, 0.8, 0]} r={0.12} t={0.035} rot={[0, s * 0.6, s * 0.5]} m={ribbon} />
       ))}
-      {/* Porthole */}
-      <mesh position={[0, 0.17, 0.2]} material={gold}>
-        <torusGeometry args={[0.07, 0.02, 8, 18]} />
-      </mesh>
-      <mesh position={[0, 0.17, 0.205]} material={porthole}>
-        <circleGeometry args={[0.065, 18]} />
-      </mesh>
-      {/* Three fins */}
+      <Sph p={[0, 0.74, 0]} r={0.06} m={ribbon} />
+      <Sph p={[0.18, 0.72, 0.12]} r={0.15} sc={[1.5, 0.3, 1.1]} m={white} />
+    </group>
+  )
+}
+
+function OrnamentBauble() {
+  const red = metal('#d8322f', { roughness: 0.12, metalness: 0.5 })
+  const gold = metal(GOLD)
+  const white = plastic('#fbfbfb', { roughness: 0.3 })
+  return (
+    <group position={[0, 0.5, 0]}>
+      <Sph r={0.4} m={red} seg={24} />
+      <Tor p={[0, 0.04, 0]} r={0.4} t={0.03} rot={[Math.PI / 2, 0, 0]} m={white} />
+      <Tor p={[0, 0.22, 0]} r={0.34} t={0.025} rot={[Math.PI / 2, 0, 0]} m={gold} />
+      <Tor p={[0, -0.18, 0]} r={0.37} t={0.025} rot={[Math.PI / 2, 0, 0]} m={gold} />
+      <Cyl p={[0, 0.42, 0]} t={0.1} h={0.1} m={gold} seg={14} />
+      <Tor p={[0, 0.55, 0]} r={0.06} t={0.015} m={gold} />
+      <Sph p={[-0.17, 0.18, 0.32]} r={0.07} sc={[1, 1.5, 0.5]} m={plastic('#ffffff', { transparent: true, opacity: 0.55 })} />
+    </group>
+  )
+}
+
+function MistletoeWreath() {
+  const leaf = plastic('#2f8f4e', { roughness: 0.6 })
+  const leaf2 = plastic('#3fae5f', { roughness: 0.6 })
+  const berry = plastic('#fbf8f0', { roughness: 0.3 })
+  const red = plastic(RED, { roughness: 0.4 })
+  return (
+    <group position={[0, 0.66, 0]} rotation-x={0.15}>
+      {Array.from({ length: 16 }, (_, i) => {
+        const a = (i / 16) * Math.PI * 2
+        return (
+          <Sph key={i} p={[Math.cos(a) * 0.38, Math.sin(a) * 0.38, 0]} r={0.12} sc={[1.5, 0.7, 0.5]} rot={[0, 0, a + Math.PI / 2 + (i % 2 ? 0.4 : -0.4)]} m={i % 2 ? leaf : leaf2} />
+        )
+      })}
+      {[0.4, 1.7, 3.2, 4.4, 5.4].map((a) => (
+        <Sph key={a} p={[Math.cos(a) * 0.38, Math.sin(a) * 0.38, 0.08]} r={0.05} m={berry} seg={10} />
+      ))}
+      <group position={[0, -0.38, 0.06]}>
+        {[-1, 1].map((s) => (
+          <Sph key={s} p={[s * 0.1, -0.02, 0]} r={0.1} sc={[1.3, 0.8, 0.5]} rot={[0, 0, -s * 0.3]} m={red} />
+        ))}
+        <Sph r={0.05} m={red} />
+        {[-1, 1].map((s) => (
+          <Box key={s} p={[s * 0.07, -0.16, 0]} s={[0.06, 0.2, 0.02]} r={[0, 0, s * 0.2]} m={red} />
+        ))}
+      </group>
+    </group>
+  )
+}
+
+function SnowGoggles() {
+  const frame = plastic('#2a3a5a', { roughness: 0.5 })
+  const lens = shine('#ff9a3a', '#c05a00', 0.25, { transparent: true, opacity: 0.8 })
+  const strap = plastic('#c42a35', { roughness: 0.9 })
+  const white = plastic(SNOW, { roughness: 1 })
+  return (
+    <group position={[0, 0.4, 0]} rotation-y={0.1}>
+      <Tor r={0.5} t={0.07} arc={Math.PI * 2} rot={[0, Math.PI / 2, 0]} m={strap} seg={28} sc={[1, 0.6, 1]} />
+      <Box s={[0.9, 0.38, 0.12]} m={frame} p={[0, 0, 0.35]} />
+      {[-0.22, 0.22].map((x) => (
+        <group key={x}>
+          <Cyl p={[x, 0, 0.42]} t={0.18} h={0.06} m={lens} r={[Math.PI / 2, 0, 0]} seg={20} />
+          <Tor p={[x, 0, 0.42]} r={0.18} t={0.025} m={frame} />
+        </group>
+      ))}
+      <Box p={[0, -0.2, 0.4]} s={[0.35, 0.04, 0.08]} m={white} />
+    </group>
+  )
+}
+
+function HotCocoaPot() {
+  const pot = plastic('#b8322f', { roughness: 0.35 })
+  const steel = metal('#d8dee8')
+  const dark = plastic('#2c2a30')
+  const mallow = plastic('#fff6ee', { roughness: 0.9 })
+  const steam = plastic('#ffffff', { transparent: true, opacity: 0.35, depthWrite: false })
+  return (
+    <group scale={[0.85, 0.85, 0.85]}>
+      <Cyl p={[0, 0.38, 0]} t={0.36} b={0.32} h={0.7} m={pot} />
+      <Cyl p={[0, 0.76, 0]} t={0.37} h={0.1} m={steel} />
+      <Sph p={[0, 0.8, 0]} r={0.33} sc={[1, 0.4, 1]} m={pot} />
+      <Sph p={[0, 0.96, 0]} r={0.06} m={dark} seg={10} />
+      <Tor p={[0.38, 0.4, 0]} r={0.2} t={0.05} arc={Math.PI} rot={[0, 0, -Math.PI / 2]} m={dark} />
+      <Cone p={[-0.4, 0.55, 0]} r={0.07} h={0.2} m={pot} rot={[0, 0, Math.PI / 2 + 0.3]} seg={10} />
       {[0, 1, 2].map((i) => (
-        <group key={i} rotation-y={(i / 3) * Math.PI * 2}>
-          <mesh position={[0.27, -0.25, 0]} rotation-z={0.25} material={red}>
-            <boxGeometry args={[0.16, 0.3, 0.03]} />
+        <Sph key={i} p={[Math.sin(i * 2.1) * 0.12, 1.1 + i * 0.18, Math.cos(i * 2.1) * 0.1]} r={0.07 + i * 0.03} sc={[1, 0.8, 1]} m={steam} />
+      ))}
+      <Sph p={[0.18, 0.88, 0.1]} r={0.06} m={mallow} seg={8} />
+      <Sph p={[0.1, 0.86, -0.15]} r={0.05} m={mallow} seg={8} />
+    </group>
+  )
+}
+
+function Snowshoes() {
+  const wood = plastic('#a8743d', { roughness: 0.7 })
+  const net = plastic('#e8d8b0', { roughness: 0.9 })
+  const strap = plastic('#c42a35', { roughness: 0.8 })
+  const shoe = (x, z, ry) => (
+    <group position={[x, 0.08, z]} rotation-y={ry}>
+      <Tor r={0.5} t={0.035} rot={[Math.PI / 2, 0, 0]} sc={[0.55, 1, 1]} m={wood} seg={28} />
+      {[-0.3, -0.15, 0, 0.15, 0.3].map((zz) => (
+        <Box key={zz} p={[0, 0, zz]} s={[0.5 * (1 - Math.abs(zz) * 1.1), 0.012, 0.012]} m={net} />
+      ))}
+      {[-0.15, 0, 0.15].map((xx) => (
+        <Box key={xx} p={[xx, 0, 0]} s={[0.012, 0.012, 0.8 * (1 - Math.abs(xx) * 1.2)]} m={net} />
+      ))}
+      <Box p={[0, 0.03, 0.05]} s={[0.3, 0.025, 0.07]} m={strap} />
+      <Box p={[0, 0.04, -0.08]} s={[0.3, 0.025, 0.07]} m={strap} />
+    </group>
+  )
+  return (
+    <group>
+      {shoe(-0.3, 0, 0.1)}
+      {shoe(0.3, 0.05, -0.1)}
+    </group>
+  )
+}
+
+function Skis() {
+  const blue = plastic('#2f78d8', { roughness: 0.3 })
+  const white = plastic('#fbfbfb', { roughness: 0.4 })
+  const dark = plastic('#22242c', { roughness: 0.5 })
+  const ski = (rot, y) => (
+    <group rotation={rot} position={[0, y, 0]}>
+      <Box s={[0.14, 0.04, 1.5]} m={blue} />
+      <Box p={[0, 0.025, 0]} s={[0.05, 0.01, 1.5]} m={white} />
+      <Box p={[0, 0.03, 0.82]} s={[0.14, 0.04, 0.3]} r={[-0.5, 0, 0]} m={blue} />
+      <Box p={[0, 0.07, 0.1]} s={[0.12, 0.08, 0.3]} m={dark} />
+    </group>
+  )
+  return (
+    <group position={[0, 0.02, 0]}>
+      {ski([0, 0.35, 0], 0.03)}
+      {ski([0, -0.35, 0], 0.1)}
+    </group>
+  )
+}
+
+function Lantern({ glowColor = '#ffb84a', glowEmissive = '#ff8a1a', aurora = false }) {
+  const iron = metal('#3a4458', { roughness: 0.45 })
+  const glassM = glass('#d8f0ff', 0.28)
+  const flame = shine(glowColor, glowEmissive, 1.6)
+  const frost = plastic(SNOW, { roughness: 1 })
+  const panels = ['#3affa0', '#3ab8ff', '#c06aff']
+  return (
+    <group scale={[0.72, 0.72, 0.72]}>
+      <Cyl p={[0, 0.06, 0]} t={0.3} b={0.34} h={0.12} m={iron} seg={6} />
+      <Cyl p={[0, 0.52, 0]} t={0.3} b={0.27} h={0.8} m={glassM} seg={6} />
+      {Array.from({ length: 6 }, (_, i) => {
+        const a = (i / 6) * Math.PI * 2 + Math.PI / 6
+        return <Cyl key={i} p={[Math.cos(a) * 0.285, 0.52, Math.sin(a) * 0.285]} t={0.022} h={0.8} m={iron} seg={6} />
+      })}
+      <Cone p={[0, 1.04, 0]} r={0.36} h={0.24} m={iron} seg={6} />
+      <Tor p={[0, 1.24, 0]} r={0.1} t={0.025} m={iron} />
+      <Tor p={[0, 1.34, 0]} r={0.3} t={0.025} arc={Math.PI} m={iron} />
+      <Cyl p={[0, 0.3, 0]} t={0.045} h={0.35} m={plastic('#f4f0e0')} seg={10} />
+      <Sph p={[0, 0.56, 0]} r={0.1} sc={[0.8, 1.5, 0.8]} m={flame} />
+      {aurora &&
+        panels.map((c, i) => (
+          <Spin key={c} speed={0.5 + i * 0.2} position={[0, 0.55, 0]}>
+            <Sph p={[0.18, 0.05 * i, 0]} r={0.06} m={shine(c, c, 1.4)} seg={10} />
+          </Spin>
+        ))}
+      <Sph p={[0, 1.15, 0.05]} r={0.2} sc={[1.2, 0.3, 1]} m={frost} />
+    </group>
+  )
+}
+
+function MusicBox() {
+  const wood = plastic('#7a4a2a', { roughness: 0.55 })
+  const gold = metal(GOLD)
+  const velvet = plastic('#a02a3a', { roughness: 0.95 })
+  const white = plastic(SNOW, { roughness: 0.6 })
+  const ice = shine('#d8f0ff', '#7ac8ff', 0.7)
+  return (
+    <group rotation-y={0.4}>
+      <Box p={[0, 0.25, 0]} s={[0.9, 0.5, 0.6]} m={wood} />
+      <Box p={[0, 0.51, 0]} s={[0.84, 0.03, 0.54]} m={velvet} />
+      {[-1, 1].map((s) => (
+        <Box key={s} p={[s * 0.45, 0.25, 0]} s={[0.02, 0.5, 0.62]} m={gold} />
+      ))}
+      <Box p={[0, 0.78, -0.4]} s={[0.92, 0.55, 0.05]} r={[-0.35, 0, 0]} m={wood} />
+      <Box p={[0, 0.78, -0.37]} s={[0.78, 0.4, 0.02]} r={[-0.35, 0, 0]} m={gold} />
+      <Cyl p={[0.52, 0.22, 0]} t={0.03} h={0.1} m={gold} r={[0, 0, Math.PI / 2]} seg={8} />
+      <Box p={[0.58, 0.22, 0]} s={[0.02, 0.14, 0.04]} m={gold} />
+      <Spin speed={1}>
+        <Cyl p={[0, 0.62, 0]} t={0.045} b={0.07} h={0.2} m={white} seg={10} />
+        <Sph p={[0, 0.76, 0]} r={0.045} m={plastic('#f4cfa8')} seg={10} />
+        <Flake len={0.12} w={0.02} depth={0.02} m={ice} branches={false} />
+      </Spin>
+    </group>
+  )
+}
+
+function IceAxe() {
+  return (
+    <group rotation-y={1.1}>
+      <IceAxeBody />
+    </group>
+  )
+}
+
+function IceAxeBody() {
+  const shaft = metal('#4a9ad8', { roughness: 0.35 })
+  const steel = metal('#e4ecf6', { roughness: 0.2 })
+  const grip = plastic('#d8322f', { roughness: 0.8 })
+  const rope = plastic('#f4c542', { roughness: 0.9 })
+  return (
+    <group position={[0, 0.35, 0]} rotation={[Math.PI / 2, 0.4, 0.15]}>
+      <Cyl t={0.04} h={1.4} m={shaft} seg={10} />
+      <Cyl p={[0, -0.25, 0]} t={0.052} h={0.5} m={grip} seg={10} />
+      <Cone p={[0, -0.74, 0]} r={0.04} h={0.12} m={steel} rot={[Math.PI, 0, 0]} seg={8} />
+      <Box p={[0, 0.7, 0]} s={[0.18, 0.1, 0.07]} m={steel} />
+      <Cone p={[-0.3, 0.72, 0]} r={0.05} h={0.5} m={steel} rot={[0, 0, Math.PI / 2 + 0.25]} seg={6} />
+      <Box p={[0.15, 0.72, 0]} s={[0.22, 0.1, 0.05]} m={steel} r={[0, 0, -0.25]} />
+      <Tor p={[0, 0.5, 0]} r={0.09} t={0.018} rot={[0, Math.PI / 2, 0]} m={rope} />
+    </group>
+  )
+}
+
+function SnowmanHat() {
+  const black = plastic('#1a1b22', { roughness: 0.55 })
+  const band = plastic(RED, { roughness: 0.6 })
+  const leaf = plastic(GREEN, { roughness: 0.6 })
+  const berry = plastic(RED, { roughness: 0.3 })
+  const white = plastic(SNOW, { roughness: 1 })
+  return (
+    <group>
+      <Cyl p={[0, 0.04, 0]} t={0.52} h={0.08} m={black} seg={28} />
+      <Cyl p={[0, 0.45, 0]} t={0.3} b={0.32} h={0.8} m={black} seg={24} />
+      <Cyl p={[0, 0.88, 0]} t={0.3} h={0.04} m={black} seg={24} />
+      <Cyl p={[0, 0.2, 0]} t={0.325} b={0.335} h={0.16} m={band} seg={24} />
+      {[-1, 1].map((s) => (
+        <Sph key={s} p={[s * 0.1, 0.22, 0.33]} r={0.09} sc={[1.5, 0.6, 0.3]} rot={[0, 0, s * 0.4]} m={leaf} />
+      ))}
+      {[-0.03, 0.05, 0.01].map((x, i) => (
+        <Sph key={i} p={[x, 0.18 + (i % 2) * 0.07, 0.36]} r={0.035} m={berry} seg={8} />
+      ))}
+      <Sph p={[0.1, 0.91, 0.05]} r={0.2} sc={[1.5, 0.3, 1.2]} m={white} />
+      <Sph p={[-0.3, 0.07, 0.35]} r={0.12} sc={[1.5, 0.3, 1]} m={white} />
+    </group>
+  )
+}
+
+// Cluster of hexagonal ice crystals; `m` / `core` are the outer and inner materials.
+function CrystalCluster({ m, core, scale = 1 }) {
+  const spec = [
+    [0, 0, 0, 0.16, 1.05, 0],
+    [0.22, 0, 0.05, 0.12, 0.75, -0.35],
+    [-0.22, 0, -0.04, 0.11, 0.65, 0.4],
+    [0.05, 0, 0.22, 0.1, 0.6, 0.25],
+    [-0.08, 0, -0.22, 0.09, 0.5, -0.3],
+  ]
+  return (
+    <group scale={[scale, scale, scale]}>
+      {spec.map(([x, , z, r, hgt, tilt], i) => (
+        <group key={i} position={[x, 0, z]} rotation={[tilt * 0.6, 0, tilt]}>
+          <Cyl p={[0, hgt / 2, 0]} t={r} h={hgt} m={m} seg={6} />
+          <Cone p={[0, hgt + r * 0.9, 0]} r={r} h={r * 1.8} m={m} seg={6} />
+          <Cyl p={[0, hgt / 2, 0]} t={r * 0.45} h={hgt} m={core} seg={6} />
+        </group>
+      ))}
+    </group>
+  )
+}
+
+function FrostCrystal() {
+  return <CrystalCluster m={glass(ICE_DEEP, 0.7)} core={shine('#e8f8ff', '#7ac8ff', 0.8)} />
+}
+
+function RoyalChristmasChest() {
+  const red = plastic('#c42a35', { roughness: 0.4 })
+  const gold = metal(GOLD, { emissive: '#7a5000', emissiveIntensity: 0.25 })
+  const green = plastic('#2f8f4e', { roughness: 0.5 })
+  const white = plastic(SNOW, { roughness: 1 })
+  return (
+    <group rotation-y={0.4}>
+      <Box p={[0, 0.25, 0]} s={[1, 0.5, 0.62]} m={red} />
+      <mesh position={[0, 0.5, 0]} rotation={[0, 0, Math.PI / 2]} scale={[0.62, 1, 1]} material={red}>
+        <cylinderGeometry args={[0.5, 0.5, 1, 20, 1, false, 0, Math.PI]} />
+      </mesh>
+      {[-0.32, 0.32].map((x) => (
+        <group key={x}>
+          <Box p={[x, 0.25, 0]} s={[0.1, 0.52, 0.64]} m={gold} />
+          <mesh position={[x, 0.5, 0]} rotation={[0, 0, Math.PI / 2]} scale={[0.64, 1, 1]} material={gold}>
+            <cylinderGeometry args={[0.5, 0.5, 0.1, 20, 1, false, 0, Math.PI]} />
           </mesh>
         </group>
       ))}
-      {/* Nozzle and flame */}
-      <mesh position={[0, -0.36, 0]} material={gold}>
-        <cylinderGeometry args={[0.12, 0.17, 0.1, 18]} />
-      </mesh>
-      <mesh position={[0, -0.58, 0]} rotation-x={Math.PI} material={flame}>
-        <coneGeometry args={[0.13, 0.4, 14]} />
-      </mesh>
-      <mesh position={[0, -0.52, 0]} rotation-x={Math.PI} material={core}>
-        <coneGeometry args={[0.07, 0.25, 10]} />
-      </mesh>
-    </group>
-  )
-}
-
-function CosmicCube() {
-  const glass = shine('#7ad0ff', '#2a6aff', 0.4, { transparent: true, opacity: 0.22, depthWrite: false })
-  const frame = metal('#f2d060', { emissive: '#a07a00', emissiveIntensity: 0.4 })
-  const inner = shine('#ff6ae0', '#e020c0', 1.2, { flatShading: true })
-  const star = shine('#ffffff', '#ffffff', 1.5)
-  const s = 0.35
-  const edges = []
-  for (const axis of [0, 1, 2])
-    for (const a of [-1, 1])
-      for (const b of [-1, 1]) {
-        const pos = [0, 0, 0]
-        const size = [0.04, 0.04, 0.04]
-        pos[(axis + 1) % 3] = a * s
-        pos[(axis + 2) % 3] = b * s
-        size[axis] = s * 2 + 0.04
-        edges.push({ pos, size })
-      }
-  return (
-    <group rotation={[0.5, 0.6, 0]}>
-      <mesh material={glass}>
-        <boxGeometry args={[s * 2, s * 2, s * 2]} />
-      </mesh>
-      {edges.map((e, i) => (
-        <mesh key={i} position={e.pos} material={frame}>
-          <boxGeometry args={e.size} />
-        </mesh>
+      <Box p={[0, 0.5, 0]} s={[1.02, 0.04, 0.64]} m={gold} />
+      <Box p={[0, 0.45, 0.33]} s={[0.14, 0.18, 0.04]} m={gold} />
+      <Sph p={[0, 0.45, 0.36]} r={0.03} m={plastic('#3a2a1a')} seg={8} />
+      {[-1, 1].map((s) => (
+        <Tor key={s} p={[s * 0.1, 1.06, 0]} r={0.1} t={0.035} rot={[0, s * 0.6, s * 0.4]} m={green} />
       ))}
-      {/* Tesseract core turning inside */}
-      <Spin speed={1.4} axis="x">
-        <Spin speed={1}>
-          <mesh rotation={[Math.PI / 4, 0, Math.PI / 4]} material={inner}>
-            <boxGeometry args={[0.28, 0.28, 0.28]} />
-          </mesh>
-        </Spin>
-      </Spin>
-      <Sparkles mat={star} spots={[[0.2, 0.22, -0.18], [-0.22, -0.15, 0.2], [0.15, -0.25, 0.1], [-0.18, 0.2, -0.05]]} size={0.025} />
+      <Sph p={[0, 1.02, 0]} r={0.06} m={green} />
+      <Sph p={[-0.25, 1.0, 0.12]} r={0.17} sc={[1.5, 0.3, 1]} m={white} />
     </group>
   )
 }
 
-const INFINITY_STONES = ['#3a6aff', '#ffd83a', '#ff2a3a', '#a03aff', '#3aff6a', '#ff8a2a']
+// ---- Epic ----
 
-function InfinityGem() {
-  const gold = metal('#f6cc3a', { emissive: '#8a6000', emissiveIntensity: 0.4 })
-  const core = shine('#ffffff', '#e8d0ff', 1.3, { flatShading: true })
-  const halo = shine('#fff2c0', '#ffd860', 1.2)
+function YetiFootprintCast() {
+  const slab = glass('#cfeaff', 0.85)
+  const deep = plastic('#6aa8d8', { roughness: 0.4 })
+  const white = plastic(SNOW, { roughness: 1 })
+  return (
+    <group rotation-y={0.3}>
+      <Box p={[0, 0.15, 0]} s={[0.95, 0.3, 1.2]} m={slab} />
+      <Sph p={[0, 0.31, -0.18]} r={0.27} sc={[0.85, 0.15, 1.5]} m={deep} />
+      {[-0.27, -0.14, 0, 0.14, 0.27].map((x, i) => (
+        <Sph key={x} p={[x, 0.31, 0.3 + Math.cos(i * 0.8 - 1.6) * 0.1]} r={0.075} sc={[1, 0.2, 1.2]} m={deep} seg={10} />
+      ))}
+      {[-0.3, 0.1].map((x, i) => (
+        <Cone key={x} p={[x, 0.36, -0.5 + i * 0.1]} r={0.03} h={0.2} m={white} seg={6} />
+      ))}
+      <Sph p={[0.38, 0.32, -0.45]} r={0.12} sc={[1.5, 0.3, 1]} m={white} />
+    </group>
+  )
+}
+
+function PenguinStatue() {
+  const black = plastic('#1d2330', { roughness: 0.4 })
+  const white = plastic('#fbfbfb', { roughness: 0.5 })
+  const orange = plastic('#ff9a2a', { roughness: 0.5 })
+  const ice = glass(ICE, 0.7)
   return (
     <group>
-      {/* Infinity loop: two rings meeting at the centre gem */}
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.26, 0, 0]} material={gold}>
-          <torusGeometry args={[0.24, 0.05, 12, 36]} />
-        </mesh>
+      <Cyl p={[0, 0.08, 0]} t={0.42} b={0.46} h={0.16} m={ice} seg={10} />
+      <Sph p={[0, 0.52, 0]} r={0.34} sc={[1, 1.3, 0.85]} m={black} />
+      <Sph p={[0, 0.5, 0.1]} r={0.28} sc={[0.9, 1.25, 0.7]} m={white} />
+      <Sph p={[0, 1.0, 0]} r={0.2} m={black} />
+      <Cone p={[0, 0.98, 0.22]} r={0.05} h={0.16} m={orange} rot={[Math.PI / 2, 0, 0]} seg={8} />
+      {[-0.08, 0.08].map((x) => (
+        <Sph key={x} p={[x, 1.04, 0.17]} r={0.03} m={white} seg={8} />
       ))}
-      <group rotation-x={Math.PI / 2}>
-        <CutGem mats={core} r={0.12} crown={0.06} pavilion={0.12} />
-      </group>
-      {/* Six coloured stones set around the loops */}
-      {INFINITY_STONES.map((c, i) => {
-        const side = i < 3 ? -1 : 1
-        const a = ((i % 3) - 1) * 1.1 + (side < 0 ? Math.PI : 0)
-        return (
-          <mesh key={c} position={[side * 0.26 + Math.cos(a) * 0.24, Math.sin(a) * 0.24, 0.05]} material={shine(c, c, 1)}>
-            <octahedronGeometry args={[0.055, 0]} />
-          </mesh>
-        )
-      })}
-      <Spin speed={1} rotation-x={Math.PI / 2 - 0.3}>
-        <mesh material={halo}>
-          <torusGeometry args={[0.66, 0.012, 6, 48]} />
-        </mesh>
-      </Spin>
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Sph p={[s * 0.34, 0.55, 0]} r={0.12} sc={[0.4, 1.5, 0.8]} rot={[0, 0, s * 0.3]} m={black} />
+          <Sph p={[s * 0.13, 0.19, 0.2]} r={0.09} sc={[1.3, 0.4, 1.6]} m={orange} seg={10} />
+        </group>
+      ))}
+      <Tor p={[0, 0.77, 0.04]} r={0.22} t={0.05} rot={[Math.PI / 2, 0, 0]} m={plastic(RED, { roughness: 0.9 })} />
+      <Box p={[0.12, 0.62, 0.22]} s={[0.1, 0.28, 0.04]} m={plastic(RED, { roughness: 0.9 })} r={[0, 0, 0.1]} />
     </group>
   )
 }
 
-function GenesisSeed() {
-  const seed = shine('#d8b860', '#b08a20', 0.45, { roughness: 0.3, metalness: 0.4 })
-  const vein = shine('#9aff6a', '#4aff2a', 1.3)
-  const leaf = shine('#5ae05a', '#2ab02a', 0.5)
-  const root = plastic('#8a6a40', { roughness: 0.8 })
-  const light = shine('#e8ffc0', '#c0ff6a', 1.5)
+function ReindeerAntlers() {
+  const horn = plastic('#8a6a46', { roughness: 0.8 })
+  const wood = plastic('#5a3a22', { roughness: 0.7 })
+  const gold = metal(GOLD)
+  const white = plastic(SNOW, { roughness: 1 })
+  const antler = (s) => (
+    <group position={[s * 0.18, 0.28, 0]} rotation={[0, 0, -s * 0.5]}>
+      <Cyl p={[0, 0.35, 0]} t={0.035} b={0.05} h={0.7} m={horn} seg={8} />
+      {[0.2, 0.42, 0.62].map((y, i) => (
+        <Cyl key={y} p={[s * 0.1, y + 0.1, 0.04 * (i % 2 ? -1 : 1)]} t={0.02} b={0.032} h={0.3 - i * 0.04} m={horn} r={[0, 0, -s * 0.9]} seg={6} />
+      ))}
+      <Cyl p={[s * 0.04, 0.78, 0]} t={0.015} b={0.03} h={0.2} m={horn} r={[0, 0, -s * 0.3]} seg={6} />
+    </group>
+  )
   return (
-    <group position={[0, -0.12, 0]}>
-      <mesh scale={[0.75, 1, 0.75]} material={seed}>
-        <sphereGeometry args={[0.32, 24, 18]} />
-      </mesh>
-      {/* Glowing seams of life */}
-      {[0, Math.PI / 3, (2 * Math.PI) / 3].map((r) => (
-        <mesh key={r} rotation-y={r} scale={[0.76, 1.01, 0.76]} material={vein}>
-          <torusGeometry args={[0.32, 0.01, 6, 36]} />
-        </mesh>
-      ))}
-      {/* Sprout with two leaves */}
-      <mesh position={[0.02, 0.45, 0]} rotation-z={-0.1} material={leaf}>
-        <cylinderGeometry args={[0.02, 0.03, 0.3, 8]} />
-      </mesh>
+    <group>
+      <Box p={[0, 0.12, -0.1]} s={[0.8, 0.24, 0.1]} m={wood} />
+      <Sph p={[0, 0.2, -0.04]} r={0.14} sc={[1.2, 0.8, 0.6]} m={horn} />
+      <Box p={[0, 0.12, -0.04]} s={[0.5, 0.05, 0.03]} m={gold} />
+      {antler(-1)}
+      {antler(1)}
+      <Sph p={[0.35, 0.55, 0]} r={0.08} sc={[1.5, 0.4, 1]} m={white} />
+    </group>
+  )
+}
+
+function SleighBellSet() {
+  const leather = plastic('#7a2a22', { roughness: 0.7 })
+  const gold = metal(GOLD, { emissive: '#7a5000', emissiveIntensity: 0.2 })
+  const dark = plastic('#3a2a10')
+  const holly = plastic(GREEN, { roughness: 0.6 })
+  return (
+    <group position={[0, 0.02, 0]}>
+      <Tor p={[0, 0.5, 0]} r={0.4} t={0.04} arc={Math.PI} m={leather} />
+      <Box p={[-0.4, 0.25, 0]} s={[0.08, 0.5, 0.03]} m={leather} />
+      <Box p={[0.4, 0.25, 0]} s={[0.08, 0.5, 0.03]} m={leather} />
+      {[-0.3, -0.1, 0.1, 0.3].map((x, i) => {
+        const y = 0.5 + Math.sqrt(0.16 - x * x) * 0.9 - 0.42
+        return (
+          <group key={x} position={[x, y + 0.1 - (i % 2) * 0.12, 0.04]}>
+            <Sph r={0.13} m={gold} />
+            <Box p={[0, -0.02, 0.12]} s={[0.1, 0.012, 0.02]} m={dark} />
+            <Sph p={[0, -0.04, 0.115]} r={0.02} m={dark} seg={6} />
+          </group>
+        )
+      })}
       {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * 0.13, 0.6, 0]} rotation-z={-s * 0.9} scale={[0.4, 1, 0.12]} material={leaf}>
-          <sphereGeometry args={[0.15, 12, 10]} />
-        </mesh>
+        <Sph key={s} p={[s * 0.08, 0.92, 0.04]} r={0.07} sc={[1.6, 0.5, 0.3]} rot={[0, 0, s * 0.5]} m={holly} />
       ))}
-      {/* Roots */}
-      {[-0.6, 0, 0.6].map((r, i) => (
-        <mesh key={i} position={[r * 0.2, -0.38, 0]} rotation-z={r} rotation-x={Math.PI} material={root}>
-          <coneGeometry args={[0.025, 0.2, 6]} />
-        </mesh>
+    </group>
+  )
+}
+
+function SantasHat() {
+  const red = plastic('#d8322f', { roughness: 0.9 })
+  const white = plastic(SNOW, { roughness: 1 })
+  return (
+    <group rotation-z={-0.1}>
+      <Tor p={[0, 0.17, 0]} r={0.44} t={0.14} rot={[Math.PI / 2, 0, 0]} m={white} seg={26} />
+      <Cone p={[0, 0.58, 0]} r={0.42} h={0.9} m={red} seg={26} />
+      <group position={[0.2, 0.95, 0]} rotation-z={-1.0}>
+        <Cone p={[0, 0.1, 0]} r={0.2} h={0.5} m={red} seg={16} />
+        <Sph p={[0, 0.4, 0]} r={0.14} m={white} />
+      </group>
+    </group>
+  )
+}
+
+function Nutcracker() {
+  const coat = plastic('#c42a35', { roughness: 0.45 })
+  const gold = metal(GOLD)
+  const black = plastic('#1a1b22', { roughness: 0.4 })
+  const skin = plastic('#f0c8a0', { roughness: 0.5 })
+  const white = plastic(SNOW, { roughness: 0.9 })
+  const blue = plastic('#2a4a8a', { roughness: 0.5 })
+  return (
+    <group>
+      <Cyl p={[0, 0.04, 0]} t={0.28} h={0.08} m={plastic(WOOD)} seg={14} />
+      <Box p={[-0.1, 0.22, 0]} s={[0.14, 0.3, 0.16]} m={blue} />
+      <Box p={[0.1, 0.22, 0]} s={[0.14, 0.3, 0.16]} m={blue} />
+      <Box p={[0, 0.55, 0]} s={[0.4, 0.45, 0.24]} m={coat} />
+      <Box p={[0, 0.5, 0.125]} s={[0.4, 0.05, 0.01]} m={gold} />
+      {[0.7, 0.58, 0.46].map((y) => (
+        <Sph key={y} p={[0, y, 0.13]} r={0.025} m={gold} seg={8} />
       ))}
-      {/* Orbiting motes of light */}
-      <Spin speed={1.3}>
-        {Array.from({ length: 6 }, (_, i) => {
-          const a = (i / 6) * Math.PI * 2
-          return (
-            <mesh key={i} position={[Math.cos(a) * 0.5, Math.sin(a * 3) * 0.12, Math.sin(a) * 0.5]} material={light}>
-              <sphereGeometry args={[0.03, 8, 6]} />
-            </mesh>
-          )
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Cyl p={[s * 0.26, 0.55, 0]} t={0.055} h={0.38} m={coat} seg={10} />
+          <Sph p={[s * 0.26, 0.35, 0]} r={0.06} m={white} seg={10} />
+          <Box p={[s * 0.18, 0.78, 0]} s={[0.1, 0.04, 0.2]} m={gold} />
+        </group>
+      ))}
+      <Box p={[0, 0.9, 0]} s={[0.3, 0.2, 0.26]} m={skin} />
+      <Box p={[0, 0.78, 0.04]} s={[0.28, 0.1, 0.22]} m={skin} />
+      <Box p={[0, 0.77, 0.15]} s={[0.22, 0.03, 0.01]} m={black} />
+      {[-0.07, 0.07].map((x) => (
+        <Sph key={x} p={[x, 0.93, 0.13]} r={0.03} m={black} seg={8} />
+      ))}
+      <Sph p={[0, 0.82, 0.13]} r={0.12} sc={[1, 0.6, 0.5]} m={white} />
+      <Cyl p={[0, 1.18, 0]} t={0.15} b={0.17} h={0.38} m={black} seg={18} />
+      <Cyl p={[0, 1.0, 0]} t={0.18} h={0.05} m={gold} seg={18} />
+      <Sph p={[0, 1.4, 0]} r={0.05} m={gold} seg={8} />
+      <Box p={[0, 1.2, 0.17]} s={[0.1, 0.22, 0.01]} m={gold} />
+    </group>
+  )
+}
+
+function PolarBearPlush() {
+  const fur = plastic('#fbfbfb', { roughness: 1 })
+  const shade = plastic('#e8eef4', { roughness: 1 })
+  const black = plastic('#1d2330', { roughness: 0.4 })
+  const scarf = plastic(RED, { roughness: 0.95 })
+  return (
+    <group rotation-y={0.2}>
+      <Sph p={[0, 0.38, 0]} r={0.36} sc={[1, 1.05, 0.9]} m={fur} seg={20} />
+      <Sph p={[0, 0.9, 0.02]} r={0.26} m={fur} seg={20} />
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Sph p={[s * 0.2, 1.1, 0]} r={0.09} m={shade} seg={10} />
+          <Sph p={[s * 0.38, 0.45, 0.08]} r={0.13} sc={[0.8, 1.3, 0.8]} rot={[0, 0, s * 0.4]} m={fur} />
+          <Sph p={[s * 0.2, 0.08, 0.15]} r={0.14} sc={[1, 0.8, 1.3]} m={shade} />
+          <Sph p={[s * 0.09, 0.93, 0.24]} r={0.03} m={black} seg={8} />
+        </group>
+      ))}
+      <Sph p={[0, 0.84, 0.25]} r={0.1} sc={[1.2, 0.85, 1]} m={shade} />
+      <Sph p={[0, 0.87, 0.34]} r={0.035} m={black} seg={8} />
+      <Tor p={[0, 0.66, 0]} r={0.24} t={0.065} rot={[Math.PI / 2, 0, 0]} m={scarf} />
+      <Box p={[0.12, 0.5, 0.22]} s={[0.12, 0.3, 0.04]} m={scarf} r={[0, 0, 0.1]} />
+    </group>
+  )
+}
+
+function FrostedChalice() {
+  const silver = metal('#dde6f2', { roughness: 0.2 })
+  const frost = glass('#d8f0ff', 0.7)
+  const gem = shine('#5ab8ff', '#2a8aff', 0.9, { flatShading: true })
+  const white = plastic(SNOW, { roughness: 1 })
+  return (
+    <group>
+      <Cyl p={[0, 0.05, 0]} t={0.3} b={0.34} h={0.1} m={silver} seg={22} />
+      <Cyl p={[0, 0.35, 0]} t={0.05} b={0.07} h={0.5} m={silver} seg={12} />
+      <Sph p={[0, 0.38, 0]} r={0.12} m={silver} seg={12} />
+      <Cyl p={[0, 0.8, 0]} t={0.38} b={0.12} h={0.5} m={silver} seg={22} />
+      <Cyl p={[0, 1.03, 0]} t={0.385} h={0.04} m={white} seg={22} />
+      {[0, 1, 2, 3, 4].map((i) => {
+        const a = (i / 5) * Math.PI * 2
+        return <Cone key={i} p={[Math.cos(a) * 0.3, 1.1, Math.sin(a) * 0.3]} r={0.05} h={0.2 + (i % 2) * 0.08} m={frost} seg={5} />
+      })}
+      <Oct p={[0, 0.82, 0.3]} r={0.07} m={gem} />
+      <Oct p={[0.22, 0.75, 0.22]} r={0.045} m={gem} />
+      <Oct p={[-0.22, 0.75, 0.22]} r={0.045} m={gem} />
+    </group>
+  )
+}
+
+function GingerbreadHouse() {
+  const brown = plastic('#a8622a', { roughness: 0.85 })
+  const dark = plastic('#7a4220', { roughness: 0.85 })
+  const icing = plastic('#fffaf0', { roughness: 0.6 })
+  const cand = [plastic(RED, { roughness: 0.4 }), plastic('#2fa84a', { roughness: 0.4 }), plastic('#ffd83a', { roughness: 0.4 })]
+  const roofAng = 0.7
+  return (
+    <group rotation-y={0.35}>
+      <Box p={[0, 0.3, 0]} s={[0.9, 0.6, 0.7]} m={brown} />
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Box p={[s * 0.26, 0.76, 0]} s={[0.56, 0.06, 0.8]} r={[0, 0, -s * roofAng]} m={dark} />
+          <Box p={[s * 0.2, 0.84, 0.4]} s={[0.55, 0.03, 0.04]} r={[0, 0, -s * roofAng]} m={icing} />
+          <Sph p={[s * 0.25, 0.96, 0.05]} r={0.12} sc={[1.5, 0.25, 1.2]} m={icing} />
+        </group>
+      ))}
+      <Box p={[0, 0.2, 0.36]} s={[0.22, 0.38, 0.02]} m={dark} />
+      <Sph p={[0.07, 0.2, 0.38]} r={0.025} m={cand[2]} seg={8} />
+      {[-0.28, 0.28].map((x) => (
+        <group key={x}>
+          <Box p={[x, 0.36, 0.36]} s={[0.17, 0.17, 0.02]} m={icing} />
+          <Box p={[x, 0.36, 0.37]} s={[0.12, 0.12, 0.02]} m={shine('#ffd88a', '#ffb030', 0.8)} />
+        </group>
+      ))}
+      {[-0.35, -0.12, 0.12, 0.35].map((x, i) => (
+        <Sph key={x} p={[x, 0.6, 0.36]} r={0.035} m={cand[i % 3]} seg={8} />
+      ))}
+      <Cyl p={[0.27, 1.0, -0.15]} t={0.07} h={0.2} m={dark} seg={8} />
+      <Sph p={[0.27, 1.13, -0.15]} r={0.1} sc={[1, 0.5, 1]} m={icing} />
+      <Cyl p={[-0.6, 0.15, 0.3]} t={0.03} b={0.0} h={0.3} m={plastic(GREEN)} seg={8} />
+      <Cone p={[-0.6, 0.2, 0.3]} r={0.14} h={0.4} m={plastic(GREEN, { roughness: 0.7 })} seg={10} />
+    </group>
+  )
+}
+
+function IceSculpture() {
+  const ice = glass('#bfe6ff', 0.6)
+  const bright = glass('#e8f7ff', 0.8)
+  const orange = plastic('#ff9a2a', { roughness: 0.4 })
+  return (
+    <group>
+      <Box p={[0, 0.14, 0]} s={[0.9, 0.28, 0.6]} m={ice} />
+      <Box p={[0, 0.3, 0]} s={[0.8, 0.04, 0.5]} m={bright} />
+      <Sph p={[0, 0.5, 0]} r={0.28} sc={[1.2, 0.8, 0.85]} m={ice} seg={18} />
+      <Tor p={[0.2, 0.78, 0]} r={0.26} t={0.07} arc={Math.PI * 1.1} rot={[0, 0, Math.PI * 0.05]} m={bright} />
+      <Sph p={[0.07, 1.0, 0]} r={0.1} m={bright} seg={12} />
+      <Cone p={[-0.06, 1.0, 0]} r={0.025} h={0.14} m={orange} rot={[0, 0, Math.PI / 2]} seg={6} />
+      {[-1, 1].map((s) => (
+        <Sph key={s} p={[0.1, 0.62, s * 0.3]} r={0.22} sc={[1.5, 0.15, 0.7]} rot={[s * 0.4, 0, 0.3]} m={bright} />
+      ))}
+      <Sph p={[0.35, 0.5, 0]} r={0.12} sc={[1, 0.6, 0.5]} m={ice} />
+    </group>
+  )
+}
+
+function CrystalSnowGlobe({ glassM, flakeM, base, snowman = true, glow }) {
+  return (
+    <group>
+      <Cyl p={[0, 0.12, 0]} t={0.36} b={0.44} h={0.24} m={base} seg={22} />
+      <Tor p={[0, 0.25, 0]} r={0.37} t={0.025} rot={[Math.PI / 2, 0, 0]} m={metal(GOLD)} />
+      <Sph p={[0, 0.65, 0]} r={0.48} m={glassM} seg={28} />
+      <Sph p={[0, 0.3, 0]} r={0.33} sc={[1, 0.3, 1]} m={plastic(SNOW, { roughness: 1 })} />
+      {snowman ? (
+        <group position={[0, 0.34, 0]}>
+          <Sph p={[0, 0.1, 0]} r={0.12} m={plastic(SNOW, { roughness: 1 })} />
+          <Sph p={[0, 0.27, 0]} r={0.085} m={plastic(SNOW, { roughness: 1 })} />
+          <Cone p={[0.07, 0.27, 0]} r={0.015} h={0.07} m={plastic('#ff8a1f')} rot={[0, 0, -Math.PI / 2]} seg={6} />
+          <Cyl p={[0, 0.35, 0]} t={0.05} h={0.07} m={plastic('#1a1b22')} seg={10} />
+        </group>
+      ) : (
+        <Sph p={[0, 0.65, 0]} r={0.12} m={glow} seg={14} />
+      )}
+      <Spin speed={0.6} position={[0, 0.65, 0]}>
+        {Array.from({ length: 12 }, (_, i) => {
+          const a = (i / 12) * Math.PI * 2
+          const r = 0.18 + (i % 3) * 0.08
+          return <Sph key={i} p={[Math.cos(a) * r, Math.sin(i * 1.7) * 0.28, Math.sin(a) * r]} r={0.018} m={flakeM} seg={6} />
         })}
       </Spin>
     </group>
   )
 }
 
-function EternityClock() {
-  const gold = metal('#f2c230', { emissive: '#7a5000', emissiveIntensity: 0.3 })
-  const glass = plastic('#e0f4ff', { transparent: true, opacity: 0.3, roughness: 0.05, depthWrite: false })
-  const sand = shine('#ffe8a0', '#ffc040', 0.9)
-  const tick = shine('#fff6d0', '#ffe080', 1.3)
-  return (
-    <group>
-      {/* Hourglass: two plates, three pillars, two glass bulbs */}
-      {[0.5, -0.5].map((y) => (
-        <mesh key={y} position={[0, y, 0]} material={gold}>
-          <cylinderGeometry args={[0.3, 0.3, 0.07, 24]} />
-        </mesh>
-      ))}
-      {[0, 1, 2].map((i) => {
-        const a = (i / 3) * Math.PI * 2
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.25, 0, Math.sin(a) * 0.25]} material={gold}>
-            <cylinderGeometry args={[0.022, 0.022, 0.95, 8]} />
-          </mesh>
-        )
-      })}
-      <mesh position={[0, 0.24, 0]} material={glass}>
-        <cylinderGeometry args={[0.2, 0.025, 0.46, 20]} />
-      </mesh>
-      <mesh position={[0, -0.24, 0]} material={glass}>
-        <cylinderGeometry args={[0.025, 0.2, 0.46, 20]} />
-      </mesh>
-      {/* Sand: what's left on top, the stream, the pile below */}
-      <mesh position={[0, 0.12, 0]} material={sand}>
-        <cylinderGeometry args={[0.12, 0.02, 0.18, 16]} />
-      </mesh>
-      <mesh position={[0, -0.12, 0]} material={sand}>
-        <cylinderGeometry args={[0.008, 0.008, 0.3, 6]} />
-      </mesh>
-      <mesh position={[0, -0.38, 0]} material={sand}>
-        <coneGeometry args={[0.17, 0.18, 16]} />
-      </mesh>
-      {/* Clock dial ring orbiting the hourglass */}
-      <Spin speed={0.5}>
-        <group rotation-x={Math.PI / 2 - 0.25}>
-          <mesh material={gold}>
-            <torusGeometry args={[0.55, 0.02, 8, 48]} />
-          </mesh>
-          {Array.from({ length: 12 }, (_, i) => {
-            const a = (i / 12) * Math.PI * 2
-            return (
-              <mesh key={i} position={[Math.cos(a) * 0.55, Math.sin(a) * 0.55, 0]} rotation-z={a} material={tick}>
-                <boxGeometry args={[0.09, 0.025, 0.025]} />
-              </mesh>
-            )
-          })}
-        </group>
-      </Spin>
-    </group>
-  )
+function CrystalSnowGlobeItem() {
+  return <CrystalSnowGlobe glassM={glass('#d8f0ff', 0.25)} flakeM={shine('#ffffff', '#ffffff', 1)} base={plastic('#2a4a8a', { roughness: 0.4 })} />
 }
 
-function CreatorCrown() {
-  const gold = metal('#ffd84a', { roughness: 0.15, emissive: '#a07000', emissiveIntensity: 0.4 })
-  const white = shine('#ffffff', '#e8f4ff', 1, { flatShading: true })
-  const velvet = plastic('#5a1aa0', { roughness: 0.9 })
-  const halo = shine('#fff8d0', '#ffe890', 1.6)
-  const gems = RAINBOW.map((c) => shine(c, c, 0.9, { flatShading: true }))
-  return (
-    <group position={[0, -0.25, 0]}>
-      <mesh position={[0, 0.1, 0]} material={gold}>
-        <cylinderGeometry args={[0.42, 0.38, 0.24, 28, 1, true]} />
-      </mesh>
-      <mesh position={[0, 0.1, 0]} scale={[1, 0.85, 1]} material={velvet}>
-        <sphereGeometry args={[0.38, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      </mesh>
-      {/* Rainbow jewels round the band */}
-      {gems.map((m, i) => {
-        const a = (i / gems.length) * Math.PI * 2
-        return (
-          <mesh key={i} position={[Math.sin(a) * 0.42, 0.1, Math.cos(a) * 0.42]} rotation-y={a} material={m}>
-            <octahedronGeometry args={[0.05, 0]} />
-          </mesh>
-        )
-      })}
-      {/* Trident points: tall centre, two curved sides, around the crown */}
-      {[0, 1, 2, 3].map((k) => (
-        <group key={k} rotation-y={(k / 4) * Math.PI * 2}>
-          <mesh position={[0, 0.48, 0.4]} material={gold}>
-            <coneGeometry args={[0.05, 0.5, 6]} />
-          </mesh>
-          {[-1, 1].map((s) => (
-            <mesh key={s} position={[s * 0.1, 0.36, 0.39]} rotation-z={-s * 0.3} material={gold}>
-              <coneGeometry args={[0.035, 0.28, 6]} />
-            </mesh>
-          ))}
-          <mesh position={[0, 0.76, 0.4]} material={white}>
-            <octahedronGeometry args={[0.04, 0]} />
-          </mesh>
-        </group>
-      ))}
-      {/* Arches over the top, orb and cross */}
-      {[0, Math.PI / 2].map((r) => (
-        <mesh key={r} position={[0, 0.22, 0]} rotation-y={r} material={gold}>
-          <torusGeometry args={[0.38, 0.025, 8, 24, Math.PI]} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.64, 0]} material={gold}>
-        <sphereGeometry args={[0.07, 14, 10]} />
-      </mesh>
-      <mesh position={[0, 0.77, 0]} material={white}>
-        <boxGeometry args={[0.03, 0.16, 0.03]} />
-      </mesh>
-      <mesh position={[0, 0.79, 0]} material={white}>
-        <boxGeometry args={[0.1, 0.03, 0.03]} />
-      </mesh>
-      {/* Floating halo */}
-      <Spin speed={0.8} position={[0, 1.0, 0]}>
-        <mesh rotation-x={Math.PI / 2} material={halo}>
-          <torusGeometry args={[0.32, 0.02, 8, 40]} />
-        </mesh>
-      </Spin>
-    </group>
-  )
+function AuroraLantern() {
+  return <Lantern glowColor="#7affd0" glowEmissive="#3affb0" aurora />
 }
 
-function OmegaStar() {
-  const star = shine('#fff2b0', '#ffd23a', 1.3, { flatShading: true })
-  const core = shine('#ffffff', '#ffffff', 2)
-  const omega = metal('#ffffff', { emissive: '#bfe4ff', emissiveIntensity: 1 })
-  const ring = shine('#ffe890', '#ffb020', 1.3)
+function FrozenMammothTusk() {
+  const ivory = plastic('#efe4cc', { roughness: 0.45 })
+  const dark = plastic('#b8a888', { roughness: 0.6 })
+  const ice = glass(ICE, 0.6)
+  const white = plastic(SNOW, { roughness: 1 })
+  const segs = 10
+  const R = 0.55
   return (
     <group>
-      <Spin speed={0.5} axis="z">
-        {/* Five-point star, each point a flattened cone */}
-        {Array.from({ length: 5 }, (_, i) => {
-          const a = (i / 5) * Math.PI * 2
+      <Box p={[0.1, 0.1, 0]} s={[1.0, 0.2, 0.55]} m={ice} />
+      <group position={[-0.25, 0.1, 0]}>
+        {Array.from({ length: segs }, (_, i) => {
+          const a = (i / segs) * Math.PI * 0.85
+          const next = ((i + 1) / segs) * Math.PI * 0.85
+          const rr = 0.13 * (1 - i / (segs + 1.5))
+          const rn = 0.13 * (1 - (i + 1) / (segs + 1.5))
+          const mid = (a + next) / 2
           return (
-            <group key={i} rotation-z={a}>
-              <mesh position={[0, 0.32, 0]} scale={[1, 1, 0.35]} material={star}>
-                <coneGeometry args={[0.16, 0.45, 4]} />
-              </mesh>
+            <group key={i} position={[R - Math.cos(mid) * R, Math.sin(mid) * R, 0]} rotation={[0, 0, -mid]}>
+              <Cyl t={rn} b={rr} h={0.55 * (Math.PI * 0.85) / segs} m={i % 3 === 2 ? dark : ivory} seg={12} />
             </group>
           )
         })}
-      </Spin>
-      <mesh scale={[1, 1, 0.5]} material={star}>
-        <sphereGeometry args={[0.2, 16, 12]} />
-      </mesh>
-      {/* Omega symbol on the front */}
-      <group position={[0, 0.0, 0.11]}>
-        <mesh position={[0, 0.02, 0]} rotation-z={-Math.PI * 0.2} material={omega}>
-          <torusGeometry args={[0.09, 0.018, 8, 24, Math.PI * 1.4]} />
-        </mesh>
-        {[-1, 1].map((s) => (
-          <mesh key={s} position={[s * 0.08, -0.07, 0]} material={omega}>
-            <boxGeometry args={[0.07, 0.025, 0.025]} />
-          </mesh>
-        ))}
       </group>
-      <mesh position={[0, 0, -0.06]} material={core}>
-        <sphereGeometry args={[0.12, 14, 10]} />
-      </mesh>
-      {/* Orbiting ring with sparkles */}
-      <Spin speed={1.2} rotation-x={1.1}>
-        <mesh material={ring}>
-          <torusGeometry args={[0.65, 0.015, 6, 48]} />
-        </mesh>
-        <Sparkles mat={core} spots={[[0.65, 0, 0], [-0.65, 0, 0], [0, 0.65, 0], [0, -0.65, 0]]} size={0.04} />
+      <Sph p={[-0.25, 0.14, 0]} r={0.15} m={dark} seg={12} />
+      <Sph p={[0.35, 0.22, 0.1]} r={0.14} sc={[1.5, 0.3, 1]} m={white} />
+      <Cone p={[0.4, 0.3, -0.1]} r={0.04} h={0.2} m={ice} seg={6} />
+    </group>
+  )
+}
+
+function GlacierGem() {
+  const gem = glass(ICE_DEEP, 0.78, { flatShading: true })
+  const bright = shine('#e8f8ff', '#7ac8ff', 0.6, { flatShading: true })
+  return (
+    <group position={[0, 0.5, 0]}>
+      <CutGem mats={[gem, bright]} r={0.42} crown={0.2} pavilion={0.48} seg={8} />
+      <group position={[0.5, -0.5, 0.2]}>
+        <CrystalCluster m={gem} core={bright} scale={0.4} />
+      </group>
+      <Sparkles mat={bright} spots={[[0.5, 0.3, 0.1], [-0.5, 0.1, -0.2], [0.2, 0.6, 0.3]]} />
+    </group>
+  )
+}
+
+// ---- Legendary ----
+
+function FrostCrown() {
+  const silver = metal('#e4ecf8', { roughness: 0.2, emissive: '#5a7aa0', emissiveIntensity: 0.2 })
+  const ice = glass(ICE, 0.8)
+  const gem = shine('#7ad0ff', '#2a8aff', 1, { flatShading: true })
+  return (
+    <group position={[0, 0.2, 0]}>
+      <SpikeCrown band={silver} spike={ice} jewel={gem} n={9} tall={0.5} />
+      <Cone p={[0, 0.55, 0]} r={0.08} h={0.55} m={ice} seg={6} />
+      <Oct p={[0, 0.2, 0.42]} r={0.07} m={gem} />
+      <Spin speed={0.7} position={[0, 0.3, 0]}>
+        <Sparkles mat={shine('#ffffff', '#bfe6ff', 1.2)} spots={[[0.55, 0.3, 0], [-0.55, 0.45, 0], [0, 0.4, 0.55], [0, 0.25, -0.55]]} size={0.04} />
       </Spin>
+    </group>
+  )
+}
+
+function FrozenPhoenixFeather() {
+  const ice = shine('#9ae0ff', '#2a9aff', 0.9)
+  const white = shine('#f4fcff', '#bfe6ff', 0.8)
+  return (
+    <group rotation-z={0.5} position={[0, 0.65, 0]}>
+      <Cyl p={[0, -0.05, 0]} t={0.02} b={0.03} h={1.3} m={white} seg={6} />
+      {[-1, 1].map((s) => (
+        <Sph key={s} p={[s * 0.17, 0.05, 0]} r={0.3} sc={[0.5, 1.2, 0.12]} rot={[0, 0, s * 0.18]} m={s > 0 ? ice : white} />
+      ))}
+      <Sph p={[0, 0.6, 0]} r={0.13} sc={[0.5, 1.2, 0.12]} m={ice} />
+      <Spin speed={1}>
+        <Sparkles mat={white} spots={[[0.4, 0.1, 0.2], [-0.4, 0.3, -0.2], [0.3, 0.6, -0.2]]} size={0.04} />
+      </Spin>
+    </group>
+  )
+}
+
+function YetiClaw() {
+  const fur = plastic('#f4f8fc', { roughness: 1 })
+  const shade = plastic('#d0dcea', { roughness: 1 })
+  const claw = plastic('#efe4cc', { roughness: 0.4 })
+  return (
+    <group rotation-y={0.3}>
+      <Sph p={[0, 0.3, 0]} r={0.36} sc={[1.25, 0.85, 1]} m={fur} seg={18} />
+      <Sph p={[-0.3, 0.24, 0.2]} r={0.2} m={shade} />
+      <Sph p={[0.32, 0.26, 0.18]} r={0.18} m={shade} />
+      {[-0.22, 0, 0.22].map((x, i) => (
+        <group key={x} rotation={[0, 0, -x * 0.9]}>
+          <Cone p={[x, 0.62, 0.08]} r={0.075 - (i === 1 ? 0 : 0.01)} h={0.5} m={claw} rot={[0.35, 0, 0]} seg={10} />
+          <Cone p={[x, 0.98, 0.26]} r={0.035} h={0.34} m={claw} rot={[0.95, 0, 0]} seg={8} />
+        </group>
+      ))}
+    </group>
+  )
+}
+
+function IceboundGauntlet() {
+  const steel = metal('#9ab4d4', { roughness: 0.3 })
+  const dark = metal('#5a7aa0', { roughness: 0.4 })
+  const ice = glass(ICE, 0.8)
+  const gem = shine('#7ad0ff', '#2a8aff', 1, { flatShading: true })
+  return (
+    <group rotation-y={0.3}>
+      <Cyl p={[0, 0.15, 0]} t={0.28} b={0.24} h={0.32} m={dark} seg={14} />
+      <Tor p={[0, 0.31, 0]} r={0.28} t={0.03} rot={[Math.PI / 2, 0, 0]} m={steel} />
+      <Box p={[0, 0.54, 0]} s={[0.52, 0.34, 0.26]} m={steel} />
+      {[-0.19, -0.065, 0.065, 0.19].map((x, i) => (
+        <group key={x}>
+          <Box p={[x, 0.84, 0]} s={[0.115, 0.3, 0.14]} m={steel} />
+          <Box p={[x, 1.04 - (i === 1 || i === 2 ? 0 : 0.05), 0]} s={[0.1, 0.18 + (i === 1 || i === 2 ? 0.04 : 0), 0.12]} m={dark} />
+          <Cone p={[x, 0.7, -0.14]} r={0.04} h={0.2} m={ice} rot={[-0.6, 0, 0]} seg={5} />
+        </group>
+      ))}
+      <Box p={[0.34, 0.6, 0]} s={[0.12, 0.3, 0.14]} r={[0, 0, -0.7]} m={steel} />
+      <Oct p={[0, 0.55, 0.15]} r={0.07} m={gem} />
+      {[-0.2, 0.2].map((x) => (
+        <Cone key={x} p={[x, 0.45, -0.15]} r={0.05} h={0.35} m={ice} rot={[-0.5, 0, 0]} seg={5} />
+      ))}
+    </group>
+  )
+}
+
+function PolarStarOrnament() {
+  const gold = metal(GOLD, { emissive: '#7a5000', emissiveIntensity: 0.35, roughness: 0.2 })
+  const silver = metal('#e8eef8')
+  const gem = shine('#7ad0ff', '#2a8aff', 1.1, { flatShading: true })
+  return (
+    <group position={[0, 0.6, 0]}>
+      <Spin speed={0.5} axis="y">
+        {Array.from({ length: 8 }, (_, i) => (
+          <group key={i} rotation-z={(i / 8) * Math.PI * 2}>
+            <group scale={[1, 1, 0.4]}>
+              <Cone p={[0, (i % 2 ? 0.35 : 0.55) / 2, 0]} r={0.1} h={i % 2 ? 0.35 : 0.55} m={i % 2 ? silver : gold} seg={4} />
+            </group>
+          </group>
+        ))}
+        <Oct r={0.16} m={gem} sc={[1, 1, 0.8]} />
+        <Tor r={0.22} t={0.015} m={silver} />
+      </Spin>
+      <Tor p={[0, 0.66, 0]} r={0.06} t={0.018} m={silver} />
+    </group>
+  )
+}
+
+function GoldenSleighBell() {
+  return (
+    <group>
+      <Bell body={metal('#ffd24a', { roughness: 0.15, emissive: '#8a5a00', emissiveIntensity: 0.35, side: DoubleSide })} trim={metal('#c8901a')} />
+      <Spin speed={0.9} position={[0, 0.5, 0]}>
+        <Sparkles mat={shine('#fff6c0', '#ffd860', 1.4)} spots={[[0.7, 0.2, 0], [-0.7, 0.4, 0], [0, 0.3, 0.7], [0, 0.1, -0.7]]} size={0.045} />
+      </Spin>
+    </group>
+  )
+}
+
+function BlizzardOrb() {
+  const silver = metal('#cfd8e8')
+  const orb = glass('#cfeaff', 0.3)
+  const core = shine('#ffffff', '#bfe6ff', 1.4)
+  return (
+    <group>
+      <Cyl p={[0, 0.06, 0]} t={0.3} b={0.36} h={0.12} m={silver} seg={20} />
+      {[0, 1, 2, 3].map((i) => (
+        <Cone key={i} p={[Math.cos(i * 1.57) * 0.28, 0.25, Math.sin(i * 1.57) * 0.28]} r={0.05} h={0.3} m={silver} rot={[Math.sin(i * 1.57) * 0.5, 0, -Math.cos(i * 1.57) * 0.5]} seg={6} />
+      ))}
+      <Sph p={[0, 0.7, 0]} r={0.46} m={orb} seg={28} />
+      <Sph p={[0, 0.7, 0]} r={0.1} m={core} />
+      {[0, 1, 2].map((k) => (
+        <Spin key={k} speed={1.2 + k * 0.5} axis="y" position={[0, 0.7, 0]} rotation-x={k * 0.5}>
+          {Array.from({ length: 6 }, (_, i) => {
+            const a = (i / 6) * Math.PI * 2
+            const r = 0.18 + k * 0.08
+            return <Sph key={i} p={[Math.cos(a) * r, Math.sin(a * 2) * 0.1, Math.sin(a) * r]} r={0.025} m={core} seg={6} />
+          })}
+        </Spin>
+      ))}
+    </group>
+  )
+}
+
+function SnowQueensWand() {
+  const silver = metal('#e8eef8', { roughness: 0.2 })
+  const ice = shine('#d8f0ff', '#7ac8ff', 0.8)
+  const gem = shine('#7ad0ff', '#2a8aff', 1.2, { flatShading: true })
+  return (
+    <group rotation-z={0.3} position={[0.1, 0.05, 0]} scale={[0.8, 0.8, 0.8]}>
+      <Cyl p={[0, 0.5, 0]} t={0.03} b={0.04} h={1.0} m={silver} seg={10} />
+      {[0.15, 0.55].map((y) => (
+        <Tor key={y} p={[0, y, 0]} r={0.045} t={0.015} rot={[Math.PI / 2, 0, 0]} m={silver} />
+      ))}
+      <Cone p={[0, 0.0, 0]} r={0.045} h={0.12} m={silver} rot={[Math.PI, 0, 0]} seg={8} />
+      <group position={[0, 1.2, 0]}>
+        <Spin speed={0.7} axis="y">
+          <Flake len={0.3} w={0.04} depth={0.04} m={ice} />
+        </Spin>
+        <Oct r={0.09} m={gem} />
+      </group>
+      <Sparkles mat={ice} spots={[[0.3, 1.0, 0.1], [-0.3, 1.35, 0], [0.1, 1.5, -0.1]]} size={0.03} />
+    </group>
+  )
+}
+
+// ---- Mythic ----
+
+function WinterDreamcatcher() {
+  const hoop = plastic('#b8d8f4', { roughness: 0.4, metalness: 0.3 })
+  const web = shine('#ffffff', '#bfe6ff', 0.7)
+  const feather = plastic('#f4f8ff', { roughness: 0.9 })
+  const feather2 = plastic('#8ec8f0', { roughness: 0.9 })
+  const bead = shine('#7ad0ff', '#2a8aff', 0.9)
+  return (
+    <group position={[0, 0.27, 0]} scale={[0.75, 0.75, 0.75]}>
+    <group position={[0, 0.7, 0]} rotation-y={0.4}>
+      <Tor r={0.4} t={0.035} m={hoop} seg={32} />
+      {Array.from({ length: 8 }, (_, i) => (
+        <group key={i} rotation-z={(i / 8) * Math.PI}>
+          <Box s={[0.8, 0.012, 0.012]} m={web} />
+        </group>
+      ))}
+      <Tor r={0.2} t={0.01} m={web} seg={24} />
+      <Tor r={0.08} t={0.01} m={web} seg={16} />
+      <Sph r={0.04} m={bead} seg={10} />
+      {[-0.25, 0, 0.25].map((x, i) => (
+        <group key={x} position={[x, -0.4 - (i === 1 ? 0.1 : 0), 0]}>
+          <Cyl p={[0, -0.1, 0]} t={0.006} h={0.2} m={web} seg={4} />
+          <Sph p={[0, -0.2, 0]} r={0.035} m={bead} seg={8} />
+          <Sph p={[0, -0.4, 0]} r={0.09} sc={[0.45, 1.6, 0.12]} m={i === 1 ? feather2 : feather} />
+        </group>
+      ))}
+      {[0.9, 2.5, 4.0].map((a) => (
+        <Sph key={a} p={[Math.cos(a) * 0.4, Math.sin(a) * 0.4, 0]} r={0.035} m={bead} seg={8} />
+      ))}
+    </group>
+    </group>
+  )
+}
+
+function BlizzardHarp() {
+  const silver = metal('#e4ecf8', { roughness: 0.22 })
+  const frame = plastic('#6aa8d8', { roughness: 0.3, metalness: 0.4 })
+  const string = shine('#ffffff', '#9ad8ff', 0.9)
+  const ice = glass(ICE, 0.8)
+  const strings = Array.from({ length: 8 }, (_, i) => {
+    const t = i / 7
+    const x = -0.22 + t * 0.52
+    const top = 0.82 + t * 0.14
+    return { x, top }
+  })
+  return (
+    <group rotation-y={0.3}>
+      <Box p={[0, 0.05, 0]} s={[0.9, 0.1, 0.16]} m={frame} />
+      <Cyl p={[0.38, 0.55, 0]} t={0.045} h={1.0} m={silver} seg={10} />
+      <Box p={[0.02, 0.92, 0]} s={[0.85, 0.07, 0.09]} r={[0, 0, 0.17]} m={silver} />
+      <Box p={[-0.33, 0.45, 0]} s={[0.15, 0.8, 0.16]} r={[0, 0, 0.04]} m={frame} />
+      {strings.map(({ x, top }) => (
+        <Cyl key={x} p={[x, (top + 0.1) / 2, 0]} t={0.008} h={top - 0.1} m={string} seg={4} />
+      ))}
+      {[0.3, 0.45, 0.6].map((y) => (
+        <Oct key={y} p={[-0.33, y, 0.09]} r={0.03} m={string} />
+      ))}
+      <Cone p={[0.38, 1.12, 0]} r={0.05} h={0.2} m={ice} seg={6} />
+      <Sparkles mat={string} spots={[[0.15, 1.1, 0.1], [-0.4, 1.0, 0.1], [0.55, 0.7, 0.05]]} size={0.035} />
+    </group>
+  )
+}
+
+function IceThrone() {
+  const ice = glass('#8ccaf4', 0.75)
+  const pale = glass('#d8f0ff', 0.85)
+  const cushion = plastic('#2a4a8a', { roughness: 0.9 })
+  const gold = metal(GOLD)
+  return (
+    <group scale={[0.65, 0.65, 0.65]}>
+      <Box p={[0, 0.18, 0]} s={[0.9, 0.36, 0.76]} m={ice} />
+      <Box p={[0, 0.4, 0.03]} s={[0.7, 0.08, 0.62]} m={cushion} />
+      <Box p={[0, 0.85, -0.32]} s={[0.84, 1.0, 0.14]} m={pale} />
+      {[-0.3, -0.1, 0.1, 0.3].map((x, i) => (
+        <Cone key={x} p={[x, 1.45 + (i === 1 || i === 2 ? 0.1 : 0), -0.32]} r={0.1} h={0.4 + (i === 1 || i === 2 ? 0.2 : 0)} m={pale} seg={6} />
+      ))}
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Box p={[s * 0.46, 0.5, 0.02]} s={[0.12, 0.28, 0.62]} m={ice} />
+          <Cone p={[s * 0.55, 0.78, -0.2]} r={0.07} h={0.35} m={pale} rot={[0, 0, -s * 0.3]} seg={6} />
+        </group>
+      ))}
+      <Oct p={[0, 1.0, -0.23]} r={0.09} m={shine('#ffd24a', '#ff9a00', 1)} />
+      <Box p={[0, 0.2, 0.39]} s={[0.4, 0.04, 0.02]} m={gold} />
+    </group>
+  )
+}
+
+function EternalSnowflake() {
+  const ice = shine('#e0f4ff', '#6ac4ff', 0.9)
+  const gold = shine('#fff2a0', '#ffd23a', 1.1)
+  return (
+    <group position={[0, 0.7, 0]}>
+      <Spin speed={0.45} axis="z">
+        <Flake len={0.6} w={0.06} depth={0.06} m={ice} />
+        <Oct r={0.12} m={gold} />
+      </Spin>
+      <Spin speed={1.1} rotation-x={1.2}>
+        <Tor r={0.7} t={0.012} m={gold} seg={40} />
+        <Sparkles mat={gold} spots={[[0.7, 0, 0], [-0.7, 0, 0]]} size={0.04} />
+      </Spin>
+    </group>
+  )
+}
+
+function FrozenHeart() {
+  const ice = glass('#9ad8ff', 0.6)
+  const core = shine('#ff4a6a', '#ff1a4a', 1.4)
+  return (
+    <group position={[0, 0.62, 0]}>
+      <group>
+        {[-1, 1].map((s) => (
+          <Sph key={s} p={[s * 0.2, 0.18, 0]} r={0.3} sc={[1, 1, 0.8]} m={ice} seg={20} />
+        ))}
+        <Cone p={[0, -0.18, 0]} r={0.43} h={0.78} m={ice} rot={[0, 0, Math.PI]} seg={20} />
+      </group>
+      <group scale={[0.55, 0.55, 0.55]} position={[0, 0.02, 0]}>
+        {[-1, 1].map((s) => (
+          <Sph key={s} p={[s * 0.2, 0.18, 0]} r={0.3} sc={[1, 1, 0.8]} m={core} seg={16} />
+        ))}
+        <Cone p={[0, -0.18, 0]} r={0.43} h={0.78} m={core} rot={[0, 0, Math.PI]} seg={16} />
+      </group>
+      {[-0.35, 0, 0.35].map((x, i) => (
+        <Cone key={x} p={[x, 0.55 - (i === 1 ? 0.1 : 0), 0.1]} r={0.05} h={0.28} m={glass('#e8f8ff', 0.85)} rot={[0.3, 0, -x * 0.6]} seg={5} />
+      ))}
+    </group>
+  )
+}
+
+// ---- Celestial ----
+
+function FrostbrandSword() {
+  const blade = glass('#bfe6ff', 0.85)
+  const fuller = shine('#e8f8ff', '#7ac8ff', 0.9)
+  const gold = metal(GOLD, { emissive: '#7a5000', emissiveIntensity: 0.3 })
+  const leather = plastic('#2a4a8a', { roughness: 0.7 })
+  const gem = shine('#7ad0ff', '#2a8aff', 1.2, { flatShading: true })
+  return (
+    <group scale={[0.75, 0.75, 0.75]} rotation-z={0.15}>
+      <Sph p={[0, 0.1, 0]} r={0.09} m={gem} seg={10} />
+      <Cyl p={[0, 0.3, 0]} t={0.05} h={0.35} m={leather} seg={10} />
+      <Box p={[0, 0.5, 0]} s={[0.6, 0.07, 0.1]} m={gold} />
+      {[-1, 1].map((s) => (
+        <Cone key={s} p={[s * 0.34, 0.56, 0]} r={0.045} h={0.2} m={gold} rot={[0, 0, -s * 0.5]} seg={6} />
+      ))}
+      <Box p={[0, 1.05, 0]} s={[0.18, 1.0, 0.035]} m={blade} />
+      <Cone p={[0, 1.66, 0]} r={0.13} h={0.22} m={blade} rot={[0, Math.PI / 4, 0]} seg={4} />
+      <Box p={[0, 1.05, 0]} s={[0.04, 0.95, 0.045]} m={fuller} />
+      <Sparkles mat={fuller} spots={[[0.2, 1.3, 0.05], [-0.2, 0.9, 0.05], [0.18, 1.55, -0.05]]} size={0.04} />
+    </group>
+  )
+}
+
+function AncientIceDragonSkull() {
+  const bone = plastic('#d8e8f4', { roughness: 0.55 })
+  const shade = plastic('#aac4da', { roughness: 0.6 })
+  const dark = plastic('#1a2230')
+  const glow = shine('#7ad8ff', '#2aa8ff', 1.4)
+  const ice = glass(ICE, 0.8)
+  return (
+    <group rotation-y={0.5}>
+      <Sph p={[0, 0.55, -0.1]} r={0.4} sc={[1, 0.85, 1.1]} m={bone} seg={20} />
+      <Box p={[0, 0.42, 0.42]} s={[0.36, 0.26, 0.62]} m={bone} />
+      <Box p={[0, 0.5, 0.45]} s={[0.2, 0.1, 0.56]} m={shade} />
+      <Box p={[0, 0.2, 0.34]} s={[0.3, 0.09, 0.6]} m={shade} />
+      {[0.2, 0.34, 0.48, 0.62].map((z) =>
+        [-1, 1].map((s) => (
+          <group key={`${z}${s}`}>
+            <Cone p={[s * 0.15, 0.27, z]} r={0.018} h={0.09} m={bone} rot={[Math.PI, 0, 0]} seg={5} />
+            <Cone p={[s * 0.12, 0.25, z]} r={0.018} h={0.08} m={bone} seg={5} />
+          </group>
+        )),
+      )}
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Sph p={[s * 0.2, 0.62, 0.2]} r={0.1} m={dark} seg={12} />
+          <Sph p={[s * 0.2, 0.62, 0.25]} r={0.05} m={glow} seg={10} />
+          <Cone p={[s * 0.3, 0.85, -0.3]} r={0.08} h={0.55} m={bone} rot={[-0.7, 0, -s * 0.5]} seg={8} />
+          <Cone p={[s * 0.38, 0.58, -0.35]} r={0.05} h={0.3} m={shade} rot={[-0.3, 0, -s * 1.2]} seg={6} />
+          <Sph p={[s * 0.06, 0.55, 0.72]} r={0.03} m={dark} seg={6} />
+        </group>
+      ))}
+      {[-0.12, 0, 0.12].map((x, i) => (
+        <Cone key={x} p={[x, 0.98 + (i === 1 ? 0.06 : 0), -0.05 - (i === 1 ? 0 : 0.05)]} r={0.05} h={0.3 + (i === 1 ? 0.1 : 0)} m={ice} seg={5} />
+      ))}
+    </group>
+  )
+}
+
+function VoidSnowglobe() {
+  return (
+    <CrystalSnowGlobe
+      snowman={false}
+      glassM={glass('#6a3ac8', 0.45)}
+      flakeM={shine('#e8d8ff', '#c08aff', 1.2)}
+      base={plastic('#1a1230', { roughness: 0.35, metalness: 0.5 })}
+      glow={shine('#2a0a5a', '#8a3aff', 1.2)}
+    />
+  )
+}
+
+function MoonlitIcicleBlade() {
+  const blade = glass('#cfeaff', 0.85)
+  const edge = shine('#ffffff', '#bfe6ff', 0.8)
+  const silver = metal('#e4ecf8', { roughness: 0.2 })
+  const leather = plastic('#2a2a4a', { roughness: 0.7 })
+  const moon = shine('#fff6d0', '#ffe890', 1.2)
+  return (
+    <group rotation-z={0.2} scale={[0.85, 0.85, 0.85]}>
+      <Sph p={[0, 0.1, 0]} r={0.09} m={moon} seg={10} />
+      <Cyl p={[0, 0.3, 0]} t={0.045} h={0.35} m={leather} seg={10} />
+      <Tor p={[0, 0.5, 0]} r={0.26} t={0.04} arc={Math.PI} rot={[0, 0, Math.PI]} m={silver} />
+      <Sph p={[0, 0.5, 0]} r={0.06} m={moon} seg={10} />
+      <group scale={[1, 1, 0.3]}>
+        <Cone p={[0, 1.15, 0]} r={0.14} h={1.3} m={blade} seg={6} />
+      </group>
+      <Cone p={[0, 1.1, 0]} r={0.03} h={1.2} m={edge} seg={4} />
+      <Sparkles mat={edge} spots={[[0.2, 1.0, 0.05], [-0.15, 1.3, 0.05]]} size={0.035} />
+    </group>
+  )
+}
+
+function GlacialPearl() {
+  const pearl = shine('#f4faff', '#9ad0ff', 0.55, { roughness: 0.08, metalness: 0.3 })
+  const shell = plastic('#cfe6f6', { roughness: 0.3, side: DoubleSide })
+  const ice = glass(ICE, 0.7)
+  const star = shine('#ffffff', '#bfe6ff', 1.4)
+  return (
+    <group>
+      <mesh position={[0, 0.3, 0]} scale={[1, 0.6, 0.9]} material={shell}>
+        <sphereGeometry args={[0.55, 24, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2]} />
+      </mesh>
+      <group position={[0, 0.3, -0.4]} rotation-x={-0.9}>
+        <mesh position={[0, 0, 0.4]} scale={[1, 0.6, 0.9]} material={shell}>
+          <sphereGeometry args={[0.55, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        </mesh>
+      </group>
+      <Sph p={[0, 0.45, 0]} r={0.3} m={pearl} seg={24} />
+      {[-0.4, 0.4].map((x) => (
+        <Cone key={x} p={[x, 0.25, 0.4]} r={0.05} h={0.25} m={ice} seg={5} />
+      ))}
+      <Spin speed={0.9} rotation-x={1.2} position={[0, 0.5, 0]}>
+        <Tor r={0.55} t={0.01} m={star} seg={36} />
+        <Sparkles mat={star} spots={[[0.55, 0, 0], [-0.55, 0, 0]]} size={0.04} />
+      </Spin>
+    </group>
+  )
+}
+
+function NorthernLightsPrism() {
+  const prism = glass('#d8f0ff', 0.5)
+  const beams = AURORA.map((c) => shine(c, c, 1.1, { transparent: true, opacity: 0.8 }))
+  const white = shine('#ffffff', '#ffffff', 1.4)
+  return (
+    <group scale={[0.85, 0.85, 0.85]}>
+      <Cyl p={[0, 0.05, 0]} t={0.28} b={0.34} h={0.1} m={metal('#cfd8e8')} seg={20} />
+      <Cyl p={[0, 0.55, 0]} t={0.3} h={0.9} m={prism} seg={3} r={[0, 0.5, 0]} />
+      <Box p={[-0.5, 0.58, 0.1]} s={[0.6, 0.035, 0.03]} m={white} r={[0, 0, -0.1]} />
+      {beams.map((m, i) => {
+        const ang = -0.45 + i * 0.18
+        const len = 0.6
+        return <Box key={i} p={[0.25 + Math.cos(ang) * len * 0.5 + 0.1, 0.55 + Math.sin(ang) * len * 0.5, 0.1]} s={[len, 0.04, 0.03]} r={[0, 0, ang]} m={m} />
+      })}
+    </group>
+  )
+}
+
+// ---- Divine ----
+
+function CrownOfTheWinterKing() {
+  const silver = metal('#f0f4fc', { roughness: 0.15, emissive: '#6a8ab0', emissiveIntensity: 0.3 })
+  const ice = glass('#bfe6ff', 0.85)
+  const fur = plastic(SNOW, { roughness: 1 })
+  const velvet = plastic('#1a3a8a', { roughness: 0.9 })
+  const white = shine('#ffffff', '#e8f4ff', 1.2, { flatShading: true })
+  const gem = shine('#5ab8ff', '#2a8aff', 1, { flatShading: true })
+  const halo = shine('#e8f8ff', '#9ad8ff', 1.5)
+  return (
+    <group position={[0, 0.2, 0]}>
+      <Cyl p={[0, 0.12, 0]} t={0.42} b={0.38} h={0.26} m={silver} seg={28} open />
+      <Tor p={[0, 0.02, 0]} r={0.4} t={0.07} rot={[Math.PI / 2, 0, 0]} m={fur} seg={28} />
+      <Sph p={[0, 0.12, 0]} r={0.38} sc={[1, 0.85, 1]} m={velvet} />
+      {Array.from({ length: 7 }, (_, i) => {
+        const a = (i / 7) * Math.PI * 2
+        return (
+          <group key={i} position={[Math.sin(a) * 0.4, 0.22, Math.cos(a) * 0.4]} rotation-y={a}>
+            <Cone p={[0, 0.3, 0]} r={0.06} h={0.6} m={ice} seg={6} />
+            <Oct p={[0, 0.66, 0]} r={0.04} m={white} />
+            <Oct p={[0, 0.0, 0.03]} r={0.04} m={gem} />
+          </group>
+        )
+      })}
+      {[0, Math.PI / 2].map((r) => (
+        <Tor key={r} p={[0, 0.26, 0]} rot={[0, r, 0]} r={0.38} t={0.025} arc={Math.PI} m={silver} />
+      ))}
+      <Sph p={[0, 0.66, 0]} r={0.07} m={silver} />
+      <Flake len={0.1} w={0.025} depth={0.025} m={white} branches={false} />
+      <group position={[0, 0.84, 0]}>
+        <Flake len={0.12} w={0.025} depth={0.025} m={white} branches={false} />
+      </group>
+      <Spin speed={0.8} position={[0, 1.05, 0]}>
+        <Tor rot={[Math.PI / 2, 0, 0]} r={0.32} t={0.02} m={halo} seg={40} />
+      </Spin>
+    </group>
+  )
+}
+
+function SantasGoldenSleigh() {
+  const gold = metal('#ffd24a', { roughness: 0.18, emissive: '#8a5a00', emissiveIntensity: 0.35 })
+  const dark = metal('#c8901a')
+  const red = plastic('#c42a35', { roughness: 0.8 })
+  const gifts = [plastic('#2f8f4e', { roughness: 0.5 }), plastic('#3a78d8', { roughness: 0.5 }), plastic('#f0f4fc', { roughness: 0.5 })]
+  const spark = shine('#fff6c0', '#ffd860', 1.4)
+  return (
+    <group rotation-y={0.5} scale={[0.95, 0.95, 0.95]}>
+      <Box p={[0, 0.34, 0]} s={[0.95, 0.12, 0.5]} m={gold} />
+      <Box p={[0, 0.4, 0]} s={[0.85, 0.04, 0.42]} m={red} />
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <Box p={[0, 0.5, s * 0.25]} s={[0.95, 0.26, 0.05]} m={gold} />
+          <Box p={[0, 0.1, s * 0.22]} s={[1.1, 0.05, 0.05]} m={dark} />
+          <Tor p={[0.55, 0.3, s * 0.22]} r={0.2} t={0.025} arc={Math.PI / 2} rot={[0, 0, -Math.PI / 2]} m={dark} />
+          {[-0.3, 0.3].map((x) => (
+            <Box key={x} p={[x, 0.22, s * 0.22]} s={[0.04, 0.26, 0.04]} m={dark} />
+          ))}
+        </group>
+      ))}
+      <Box p={[-0.5, 0.62, 0]} s={[0.06, 0.55, 0.52]} r={[0, 0, 0.18]} m={gold} />
+      <Tor p={[0.42, 0.55, 0]} r={0.2} t={0.05} arc={Math.PI / 2} rot={[0, 0, 0]} m={gold} />
+      <Box p={[0.55, 0.5, 0]} s={[0.04, 0.3, 0.5]} m={gold} />
+      {gifts.map((m, i) => (
+        <Box key={i} p={[-0.2 + i * 0.22, 0.52 + (i % 2) * 0.05, 0]} s={[0.2, 0.18 + (i % 2) * 0.1, 0.2]} m={m} r={[0, i * 0.4, 0]} />
+      ))}
+      <Spin speed={0.7} position={[0, 0.6, 0]}>
+        <Sparkles mat={spark} spots={[[0.75, 0.2, 0.2], [-0.75, 0.3, -0.2], [0.2, 0.5, 0.6], [-0.2, 0.2, -0.6]]} size={0.045} />
+      </Spin>
+    </group>
+  )
+}
+
+function EverfrostGem() {
+  const gem = glass('#9ad8ff', 0.8, { flatShading: true })
+  const bright = shine('#f0fbff', '#7ac8ff', 0.8, { flatShading: true })
+  const ring = shine('#e8f8ff', '#9ad8ff', 1.3)
+  return (
+    <group position={[0, 0.5, 0]}>
+      <CutGem mats={[gem, bright, gem, gem, bright, gem, bright, gem]} r={0.42} crown={0.22} pavilion={0.55} seg={8} />
+      <Spin speed={1} rotation-x={1.1}>
+        <Tor r={0.68} t={0.012} m={ring} seg={44} />
+      </Spin>
+      <Spin speed={-0.8} rotation-x={0.5} rotation-z={0.8}>
+        <Tor r={0.58} t={0.01} m={ring} seg={44} />
+        <Sparkles mat={bright} spots={[[0.58, 0, 0], [-0.58, 0, 0]]} size={0.04} />
+      </Spin>
+    </group>
+  )
+}
+
+function SeedOfWinter() {
+  const seed = shine('#dff0fb', '#8ac8f4', 0.45, { roughness: 0.3, metalness: 0.3 })
+  const vein = shine('#9ae8ff', '#4ac8ff', 1.3)
+  const leaf = shine('#d8f4ff', '#6ac0f0', 0.6)
+  const root = glass(ICE, 0.8)
+  const light = shine('#ffffff', '#bfe6ff', 1.5)
+  return (
+    <group position={[0, 0.4, 0]}>
+      <Sph r={0.32} sc={[0.75, 1, 0.75]} m={seed} seg={24} />
+      {[0, Math.PI / 3, (2 * Math.PI) / 3].map((r) => (
+        <Tor key={r} r={0.32} t={0.01} rot={[0, r, 0]} sc={[0.76, 1.01, 0.76]} m={vein} seg={36} />
+      ))}
+      <Cyl p={[0.02, 0.45, 0]} t={0.02} b={0.03} h={0.3} m={leaf} r={[0, 0, -0.1]} seg={8} />
+      {[-1, 1].map((s) => (
+        <Sph key={s} p={[s * 0.13, 0.6, 0]} r={0.15} sc={[0.4, 1, 0.12]} rot={[0, 0, -s * 0.9]} m={leaf} />
+      ))}
+      <group position={[0.02, 0.7, 0]}>
+        <Flake len={0.1} w={0.018} depth={0.018} m={light} branches={false} />
+      </group>
+      {[-0.6, 0, 0.6].map((r, i) => (
+        <Cone key={i} p={[r * 0.2, -0.38, 0]} r={0.03} h={0.22} m={root} rot={[Math.PI, 0, r]} seg={5} />
+      ))}
+      <Spin speed={1.3}>
+        {Array.from({ length: 6 }, (_, i) => {
+          const a = (i / 6) * Math.PI * 2
+          return <Sph key={i} p={[Math.cos(a) * 0.5, Math.sin(a * 3) * 0.12, Math.sin(a) * 0.5]} r={0.03} m={light} seg={8} />
+        })}
+      </Spin>
+    </group>
+  )
+}
+
+function EternalFrostClock() {
+  const silver = metal('#e8eef8', { roughness: 0.2 })
+  const face = glass('#d8f0ff', 0.55)
+  const tick = shine('#ffffff', '#9ad8ff', 1.2)
+  const hand = shine('#7ad0ff', '#2a8aff', 1.2)
+  const ice = glass(ICE, 0.8)
+  return (
+    <group position={[0, 0.56, 0]} scale={[0.8, 0.8, 0.8]}>
+      <Cyl p={[0, -0.64, 0]} t={0.2} b={0.38} h={0.12} m={silver} seg={16} />
+      <Tor r={0.5} t={0.04} m={silver} seg={40} />
+      <Cyl t={0.48} h={0.05} m={face} r={[Math.PI / 2, 0, 0]} seg={40} />
+      {Array.from({ length: 12 }, (_, i) => {
+        const a = (i / 12) * Math.PI * 2
+        const major = i % 3 === 0
+        return <Box key={i} p={[Math.sin(a) * 0.4, Math.cos(a) * 0.4, 0.03]} r={[0, 0, -a]} s={[major ? 0.05 : 0.03, major ? 0.12 : 0.07, 0.02]} m={tick} />
+      })}
+      <Spin speed={-0.15} axis="z" position={[0, 0, 0.05]}>
+        <Box p={[0, 0.14, 0]} s={[0.035, 0.3, 0.015]} m={hand} />
+      </Spin>
+      <Spin speed={-1.2} axis="z" position={[0, 0, 0.06]}>
+        <Box p={[0, 0.2, 0]} s={[0.02, 0.42, 0.015]} m={tick} />
+      </Spin>
+      <Sph p={[0, 0, 0.06]} r={0.03} m={silver} seg={10} />
+      {[-0.3, 0, 0.3].map((x, i) => (
+        <Cone key={x} p={[x, 0.55 + (i === 1 ? 0.1 : 0), 0]} r={0.06} h={0.28 + (i === 1 ? 0.12 : 0)} m={ice} seg={5} />
+      ))}
+    </group>
+  )
+}
+
+function CosmicSnowflake() {
+  const white = shine('#ffffff', '#cfe8ff', 1, { flatShading: true })
+  const gold = shine('#ffe890', '#ffc040', 1.2)
+  return (
+    <group position={[0, 0.7, 0]}>
+      <Spin speed={0.5} axis="y">
+        <Flake len={0.5} m={white} />
+        <group rotation-x={Math.PI / 2}>
+          <Flake len={0.5} m={white} />
+        </group>
+        <group rotation-y={Math.PI / 2}>
+          <Flake len={0.5} m={white} />
+        </group>
+        <Oct r={0.14} m={gold} />
+      </Spin>
+      <Spin speed={1.1} rotation-x={1.0}>
+        <Tor r={0.72} t={0.012} m={gold} seg={44} />
+        <Sparkles mat={gold} spots={[[0.72, 0, 0], [-0.72, 0, 0]]} size={0.04} />
+      </Spin>
+      <Spin speed={-0.7} rotation-x={0.3} rotation-z={1.2}>
+        <Tor r={0.62} t={0.01} m={white} seg={44} />
+      </Spin>
+    </group>
+  )
+}
+
+function StarTreeTopper() {
+  const gold = metal('#ffd24a', { roughness: 0.15, emissive: '#a07000', emissiveIntensity: 0.5 })
+  const core = shine('#fff6c0', '#ffe070', 1.6)
+  const halo = shine('#fff8d0', '#ffe890', 1.6)
+  const green = plastic('#2f8f4e', { roughness: 0.7 })
+  return (
+    <group>
+      <Cone p={[0, 0.2, 0]} r={0.14} h={0.4} m={green} seg={10} />
+      <Cyl p={[0, 0.42, 0]} t={0.06} h={0.12} m={gold} seg={10} />
+      <group position={[0, 0.85, 0]}>
+        <Spin speed={0.8} axis="y">
+          {Array.from({ length: 5 }, (_, i) => (
+            <group key={i} rotation-z={(i / 5) * Math.PI * 2}>
+              <group scale={[1, 1, 0.45]}>
+                <Cone p={[0, 0.22, 0]} r={0.13} h={0.45} m={gold} seg={4} />
+              </group>
+            </group>
+          ))}
+          <Sph r={0.17} sc={[1, 1, 0.6]} m={core} />
+        </Spin>
+        <Spin speed={-0.6} rotation-x={1.3}>
+          <Tor r={0.52} t={0.012} m={halo} seg={40} />
+          <Sparkles mat={core} spots={[[0.52, 0, 0], [-0.52, 0, 0]]} size={0.04} />
+        </Spin>
+      </group>
     </group>
   )
 }
@@ -2603,31 +1933,36 @@ export function GenericItem() {
 }
 
 export const MODELS = {
-  Rock, Coal, Bone, Skull, Mushroom, Anchor, Gem, 'Beaded Bracelet': Bracelet,
-  Coin, 'Brass Bell': BrassBell, Binoculars, 'Iron Bar': IronBar, 'Pirate Hat': PirateHat,
-  Anvil, Dagger, TNT, Bomb, Helmet, Quartz, Emerald, Amethyst, 'Porcelain Vase': PorcelainVase,
-  // Common / Uncommon
-  Feather, Seashell, Acorn, Pinecone, 'Old Boot': OldBoot, Compass, 'Silver Key': SilverKey,
+  // Common
+  'Wool Mitten': WoolMitten, 'Winter Boot': WinterBoot, 'Snowy Mug': SnowyMug, 'Candy Cane': CandyCane,
+  'Coal Button': CoalButton, 'Carrot Nose': CarrotNose, Snowball, Icicle, 'Twig Arm': TwigArm,
+  Pinecone, 'Snowflake Charm': SnowflakeCharm,
+  // Uncommon
+  'Silver Bell': SilverBell, 'Frozen Lunchbox': FrozenLunchbox, 'Toy Robot': ToyRobot, 'Knit Scarf': KnitScarf,
+  'Ice Skates': IceSkates, 'Thermos Flask': ThermosFlask, 'Gingerbread Man': GingerbreadMan, 'Sled Runner': SledRunner,
   // Rare
-  'Crystal Ball': CrystalBall, 'Ancient Scroll': AncientScroll, 'Golden Ring': GoldenRing,
-  Ruby, Sapphire, 'Pocket Watch': PocketWatch,
+  'Gift Box': GiftBox, 'Ornament Bauble': OrnamentBauble, 'Mistletoe Wreath': MistletoeWreath,
+  'Snow Goggles': SnowGoggles, 'Hot Cocoa Pot': HotCocoaPot, Snowshoes, Skis, Lantern, 'Music Box': MusicBox,
+  'Ice Axe': IceAxe, 'Snowman Hat': SnowmanHat, 'Frost Crystal': FrostCrystal, 'Royal Christmas Chest': RoyalChristmasChest,
   // Epic
-  'Jade Idol': JadeIdol, 'Royal Crown': RoyalCrown, 'Viking Helmet': VikingHelmet, 'War Drum': WarDrum,
-  'Dragon Egg': DragonEgg, 'Magic Lamp': MagicLamp, 'Siren Harp': SirenHarp, 'Pirate Flag': PirateFlag,
-  'Moon Mask': MoonMask, 'Thunder Hammer': ThunderHammer, 'Golden Chalice': GoldenChalice,
+  'Yeti Footprint Cast': YetiFootprintCast, 'Penguin Statue': PenguinStatue, 'Reindeer Antlers': ReindeerAntlers,
+  'Sleigh Bell Set': SleighBellSet, "Santa's Hat": SantasHat, Nutcracker, 'Polar Bear Plush': PolarBearPlush,
+  'Frosted Chalice': FrostedChalice, 'Gingerbread House': GingerbreadHouse, 'Ice Sculpture': IceSculpture,
+  'Aurora Lantern': AuroraLantern, 'Crystal Snow Globe': CrystalSnowGlobeItem, 'Frozen Mammoth Tusk': FrozenMammothTusk,
+  'Glacier Gem': GlacierGem,
   // Legendary
-  'Phoenix Feather': PhoenixFeather, 'Star Fragment': StarFragment, 'Kraken Eye': KrakenEye,
-  'Titan Gauntlet': TitanGauntlet, 'Sun Medallion': SunMedallion, 'Frost Crown': FrostCrown,
-  'Griffin Claw': GriffinClaw, 'Storm Crown': StormCrown,
+  'Frozen Phoenix Feather': FrozenPhoenixFeather, 'Yeti Claw': YetiClaw, 'Icebound Gauntlet': IceboundGauntlet,
+  'Polar Star Ornament': PolarStarOrnament, 'Golden Sleigh Bell': GoldenSleighBell, 'Blizzard Orb': BlizzardOrb,
+  "Snow Queen's Wand": SnowQueensWand, 'Frost Crown': FrostCrown,
   // Mythic
-  'Time Crystal': TimeCrystal, 'Celestial Harp': CelestialHarp, 'Obsidian Throne': ObsidianThrone,
-  'Phoenix Heart': PhoenixHeart, 'Dream Catcher': DreamCatcher,
+  'Winter Dreamcatcher': WinterDreamcatcher, 'Blizzard Harp': BlizzardHarp, 'Ice Throne': IceThrone,
+  'Eternal Snowflake': EternalSnowflake, 'Frozen Heart': FrozenHeart,
   // Celestial
-  Excalibur, 'Ancient Dragon Skull': AncientDragonSkull, 'Void Orb': VoidOrb,
-  'Rainbow Diamond': RainbowDiamond, 'Astral Blade': AstralBlade, 'Galaxy Pearl': GalaxyPearl,
-  'Aurora Veil': AuroraVeil,
+  'Frostbrand Sword': FrostbrandSword, 'Ancient Ice Dragon Skull': AncientIceDragonSkull,
+  'Void Snowglobe': VoidSnowglobe, 'Moonlit Icicle Blade': MoonlitIcicleBlade, 'Aurora Veil': AuroraVeil,
+  'Glacial Pearl': GlacialPearl, 'Northern Lights Prism': NorthernLightsPrism,
   // Divine
-  'Golden Rocket': GoldenRocket, 'Cosmic Cube': CosmicCube, 'Infinity Gem': InfinityGem,
-  'Genesis Seed': GenesisSeed, 'Eternity Clock': EternityClock, 'Creator Crown': CreatorCrown,
-  'Omega Star': OmegaStar,
+  'Crown of the Winter King': CrownOfTheWinterKing, "Santa's Golden Sleigh": SantasGoldenSleigh,
+  'Everfrost Gem': EverfrostGem, 'Seed of Winter': SeedOfWinter, 'Eternal Frost Clock': EternalFrostClock,
+  'Cosmic Snowflake': CosmicSnowflake, 'Star Tree Topper': StarTreeTopper,
 }

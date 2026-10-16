@@ -1,80 +1,101 @@
-// Every loot item, ported from Chop Trees for Treasure (data/loot.js): name,
-// rarity, glyph and sell value. Which leaf piles drop what is decided in loot.js
+// Every loot item (snow-themed): name, rarity, glyph and sell value. Which leaf piles drop what is decided in loot.js
 // (x1 Luck zone: Common + Uncommon only; higher zones scale with LUCK_LOOT).
 
-// Extra index collectables: [name, rarity, glyph, value in $]. Any of them can spawn, by rarity (see pickItem).
-const EXTRA_ITEMS = [
-  ['Pirate Hat', 'Rare', '🏴‍☠️', 4900],
-  ['Anvil', 'Rare', '⚒️', 5690],
-  ['Dagger', 'Rare', '🗡️', 6600],
-  ['TNT', 'Rare', '🧨', 7670],
-  ['Bomb', 'Rare', '💣', 8900],
-  ['Helmet', 'Rare', '🪖', 10300],
-  ['Quartz', 'Rare', '🔹', 12000],
-  ['Feather', 'Common', '🪶', 10],
-  ['Seashell', 'Common', '🐚', 13],
-  ['Acorn', 'Common', '🌰', 11],
+// Every collectable: [name, rarity, glyph, value in $]. Any of them can spawn, by rarity (see pickItem).
+// Listed in Index order (stable-sorted by rarity below), so the first few of each tier show first.
+const ITEMS = [
+  // Common
+  ['Wool Mitten', 'Common', '🧤', 10],
+  ['Winter Boot', 'Common', '🥾', 12],
+  ['Snowy Mug', 'Common', '☕', 14],
+  ['Candy Cane', 'Common', '🍬', 16],
+  ['Coal Button', 'Common', '⚫', 18],
+  ['Carrot Nose', 'Common', '🥕', 20],
+  ['Snowball', 'Common', '⚪', 10],
+  ['Icicle', 'Common', '🧊', 13],
+  ['Twig Arm', 'Common', '🌿', 11],
   ['Pinecone', 'Common', '🌲', 15],
-  ['Old Boot', 'Common', '🥾', 17],
-  ['Compass', 'Uncommon', '🧭', 130],
-  ['Silver Key', 'Uncommon', '🗝️', 150],
-  ['Crystal Ball', 'Rare', '🔮', 2000],
-  ['Ancient Scroll', 'Rare', '📜', 3130],
-  ['Golden Ring', 'Rare', '💍', 4220],
-  ['Ruby', 'Rare', '🔴', 2320],
-  ['Sapphire', 'Rare', '🔵', 2700],
-  ['Pocket Watch', 'Rare', '⌚', 3630],
-  ['Jade Idol', 'Epic', '🗿', 28700],
-  ['Royal Crown', 'Epic', '👑', 75300],
-  ['Viking Helmet', 'Epic', '⛑️', 37800],
-  ['War Drum', 'Epic', '🥁', 25000],
-  ['Dragon Egg', 'Epic', '🥚', 99200],
-  ['Magic Lamp', 'Epic', '🪔', 57200],
-  ['Siren Harp', 'Epic', '🪕', 43400],
-  ['Pirate Flag', 'Epic', '🏴‍☠️', 32900],
-  ['Moon Mask', 'Epic', '🎭', 49800],
-  ['Thunder Hammer', 'Epic', '🔨', 86400],
-  ['Golden Chalice', 'Epic', '🏆', 65600],
-  ['Emerald', 'Epic', '🟢', 150000],
-  ['Porcelain Vase', 'Epic', '🏺', 114000],
-  ['Amethyst', 'Epic', '🟣', 131000],
-  ['Phoenix Feather', 'Legendary', '🔥', 300000],
-  ['Excalibur', 'Celestial', '🗡️', 40000000],
-  ['Star Fragment', 'Legendary', '🌟', 647000],
-  ['Kraken Eye', 'Legendary', '👁️', 1080000],
-  ['Titan Gauntlet', 'Legendary', '🥊', 388000],
-  ['Sun Medallion', 'Legendary', '🌞', 501000],
-  ['Frost Crown', 'Legendary', '❄️', 1800000],
-  ['Ancient Dragon Skull', 'Celestial', '🐉', 54300000],
-  ['Time Crystal', 'Mythic', '🕰️', 5410000],
-  ['Void Orb', 'Celestial', '⚫', 73700000],
-  ['Rainbow Diamond', 'Celestial', '🌈', 250000000],
-  ['Astral Blade', 'Celestial', '⚔️', 100000000],
-  ['Celestial Harp', 'Mythic', '🎶', 12900000],
-  ['Golden Rocket', 'Divine', '🚀', 393000000],
-  ['Cosmic Cube', 'Divine', '🧊', 624000000],
-  ['Infinity Gem', 'Divine', '♾️', 441000000],
-  ['Griffin Claw', 'Legendary', '🦅', 835000],
-  ['Storm Crown', 'Legendary', '⚡', 1390000],
-  ['Obsidian Throne', 'Mythic', '🪑', 8370000],
-  ['Phoenix Heart', 'Mythic', '❤️‍🔥', 20000000],
-  ['Dream Catcher', 'Mythic', '🕸️', 3500000],
-  ['Galaxy Pearl', 'Celestial', '🪐', 184000000],
+  ['Snowflake Charm', 'Common', '❄️', 17],
+  // Uncommon
+  ['Silver Bell', 'Uncommon', '🔔', 126],
+  ['Frozen Lunchbox', 'Uncommon', '🧰', 111],
+  ['Toy Robot', 'Uncommon', '🤖', 158],
+  ['Knit Scarf', 'Uncommon', '🧣', 79],
+  ['Ice Skates', 'Uncommon', '⛸️', 142],
+  ['Thermos Flask', 'Uncommon', '🫖', 95],
+  ['Gingerbread Man', 'Uncommon', '🍪', 130],
+  ['Sled Runner', 'Uncommon', '🛷', 150],
+  // Rare
+  ['Royal Christmas Chest', 'Rare', '🎁', 12000],
+  ['Frost Crystal', 'Rare', '💠', 10300],
+  ['Snowman Hat', 'Rare', '🎩', 8900],
+  ['Ice Axe', 'Rare', '⛏️', 7670],
+  ['Music Box', 'Rare', '🎶', 6600],
+  ['Lantern', 'Rare', '🏮', 5690],
+  ['Skis', 'Rare', '🎿', 4900],
+  ['Snowshoes', 'Rare', '👣', 4220],
+  ['Hot Cocoa Pot', 'Rare', '🍫', 3630],
+  ['Snow Goggles', 'Rare', '🥽', 3130],
+  ['Mistletoe Wreath', 'Rare', '🎄', 2700],
+  ['Ornament Bauble', 'Rare', '🔴', 2320],
+  ['Gift Box', 'Rare', '🎀', 2000],
+  // Epic
+  ['Glacier Gem', 'Epic', '💎', 150000],
+  ['Frozen Mammoth Tusk', 'Epic', '🦣', 131000],
+  ['Crystal Snow Globe', 'Epic', '🔮', 114000],
+  ['Aurora Lantern', 'Epic', '🪔', 99200],
+  ['Ice Sculpture', 'Epic', '🦢', 86400],
+  ['Gingerbread House', 'Epic', '🏠', 75300],
+  ['Frosted Chalice', 'Epic', '🏆', 65600],
+  ['Polar Bear Plush', 'Epic', '🧸', 57200],
+  ['Nutcracker', 'Epic', '💂', 49800],
+  ["Santa's Hat", 'Epic', '🎅', 43400],
+  ['Sleigh Bell Set', 'Epic', '🛎️', 37800],
+  ['Reindeer Antlers', 'Epic', '🦌', 32900],
+  ['Penguin Statue', 'Epic', '🐧', 28700],
+  ['Yeti Footprint Cast', 'Epic', '🦶', 25000],
+  // Legendary
+  ['Frost Crown', 'Legendary', '👑', 1800000],
+  ["Snow Queen's Wand", 'Legendary', '🪄', 1390000],
+  ['Blizzard Orb', 'Legendary', '🌨️', 1080000],
+  ['Golden Sleigh Bell', 'Legendary', '🔔', 835000],
+  ['Polar Star Ornament', 'Legendary', '🌟', 647000],
+  ['Icebound Gauntlet', 'Legendary', '🥊', 501000],
+  ['Yeti Claw', 'Legendary', '🦴', 388000],
+  ['Frozen Phoenix Feather', 'Legendary', '🪶', 300000],
+  // Mythic
+  ['Frozen Heart', 'Mythic', '💙', 20000000],
+  ['Eternal Snowflake', 'Mythic', '❄️', 12900000],
+  ['Ice Throne', 'Mythic', '🪑', 8370000],
+  ['Blizzard Harp', 'Mythic', '🪕', 5410000],
+  ['Winter Dreamcatcher', 'Mythic', '🕸️', 3500000],
+  // Celestial
+  ['Northern Lights Prism', 'Celestial', '🌈', 250000000],
+  ['Glacial Pearl', 'Celestial', '🦪', 184000000],
   ['Aurora Veil', 'Celestial', '🌌', 136000000],
-  ['Genesis Seed', 'Divine', '🌱', 495000000],
-  ['Eternity Clock', 'Divine', '⏳', 556000000],
-  ['Creator Crown', 'Divine', '🔱', 350000000],
-  ['Omega Star', 'Divine', '✨', 700000000],
+  ['Moonlit Icicle Blade', 'Celestial', '🗡️', 100000000],
+  ['Void Snowglobe', 'Celestial', '🔮', 73700000],
+  ['Ancient Ice Dragon Skull', 'Celestial', '🐉', 54300000],
+  ['Frostbrand Sword', 'Celestial', '⚔️', 40000000],
+  // Divine
+  ['Star Tree Topper', 'Divine', '⭐', 700000000],
+  ['Cosmic Snowflake', 'Divine', '✨', 624000000],
+  ['Eternal Frost Clock', 'Divine', '⏳', 556000000],
+  ['Seed of Winter', 'Divine', '🌱', 495000000],
+  ['Everfrost Gem', 'Divine', '♾️', 441000000],
+  ["Santa's Golden Sleigh", 'Divine', '🛷', 393000000],
+  ['Crown of the Winter King', 'Divine', '🔱', 350000000],
 ]
 
 // The x1 Luck zone drop plan (loot.js). Bag capacity is state.backpackMax (config HUD_START).
-export const X1_DROPS = { piles: 22, uncommon: 3 } // of the zone's piles; the rest of the 22 are Common
+export const X1_DROPS = { piles: 11, uncommon: 2 } // of the zone's piles; the rest of the 11 are Common
 // Higher Luck zones (x2 and up): the further out, the more piles drop loot, the more items
 // each drops, and the higher their rarity.
 //   fullAt   zone index (0 = x1) from which every pile drops loot
 //   maxItems items per pile in the last zone (1 in x2, rising evenly)
 //   bonus    chance of a lucky one-tier upgrade on each item (the last zone is already the top tier)
-export const LUCK_LOOT = { fullAt: 4, maxItems: 4, bonus: 0.1 }
+//   density  multiplier on the chance that a pile drops loot (0.5 = half as many loot piles)
+export const LUCK_LOOT = { fullAt: 4, maxItems: 2, bonus: 0.1, density: 0.5 }
 // Best rarity tier a zone tends to drop (zone 0 = x1): tiers spread evenly over the zones, so
 // the rarest items only turn up in the last ones. Matches rollTier() in loot.js.
 export function zoneTier(zone, zoneCount) {
@@ -87,38 +108,12 @@ export const LOOT_PICKUP_RANGE = 2.4 // metres, player to the item
 export const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Secret', 'Celestial', 'Divine']
 
 // Every collectable shown in the Index window: [name, rarity, glyph].
-export const ITEM_CATALOG = [
-  ['Rock', 'Common', '🪨'],
-  ['Coal', 'Common', '⚫'],
-  ['Coin', 'Common', '🪙'],
-  ['Bone', 'Common', '🦴'],
-  ['Skull', 'Common', '💀'],
-  ['Mushroom', 'Common', '🍄'],
-  ['Iron Bar', 'Uncommon', '🔩'],
-  ['Gem', 'Uncommon', '💎'],
-  ['Beaded Bracelet', 'Uncommon', '📿'],
-  ['Brass Bell', 'Uncommon', '🔔'],
-  ['Anchor', 'Uncommon', '⚓'],
-  ['Binoculars', 'Uncommon', '🔭'],
-  ...EXTRA_ITEMS.map(([name, rarity, glyph]) => [name, rarity, glyph]),
-].sort((a, b) => RARITIES.indexOf(a[1]) - RARITIES.indexOf(b[1])) // stable: keeps insertion order within a tier
+export const ITEM_CATALOG = ITEMS.map(([name, rarity, glyph]) => [name, rarity, glyph]).sort(
+  (a, b) => RARITIES.indexOf(a[1]) - RARITIES.indexOf(b[1]),
+) // stable: keeps insertion order within a tier
 
 // Per-item reference: name -> { rarity, value in $ }.
-export const ITEM_INFO = {
-  Rock: { rarity: 'Common', value: 10 },
-  Coal: { rarity: 'Common', value: 12 },
-  Bone: { rarity: 'Common', value: 16 },
-  Skull: { rarity: 'Common', value: 18 },
-  Mushroom: { rarity: 'Common', value: 20 },
-  Coin: { rarity: 'Common', value: 14 },
-  'Iron Bar': { rarity: 'Uncommon', value: 79 },
-  Anchor: { rarity: 'Uncommon', value: 142 },
-  Gem: { rarity: 'Uncommon', value: 95 },
-  'Beaded Bracelet': { rarity: 'Uncommon', value: 111 },
-  'Brass Bell': { rarity: 'Uncommon', value: 126 },
-  Binoculars: { rarity: 'Uncommon', value: 158 },
-  ...Object.fromEntries(EXTRA_ITEMS.map(([name, rarity, , value]) => [name, { rarity, value }])),
-}
+export const ITEM_INFO = Object.fromEntries(ITEMS.map(([name, rarity, , value]) => [name, { rarity, value }]))
 
 // Sell Treasure row background per rarity tier (common = lavender, uncommon = green, ...).
 export const RARITY_ROW_BG = {

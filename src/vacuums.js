@@ -3,11 +3,10 @@
 // state.vacuumOwned; Equip picks which one's power counts (state.totalPower).
 import { player } from './player.js'
 import { offer } from './interact.js'
-import { notify, shortMoney, state, toast } from './state.js'
+import { notify, state, toast } from './state.js'
 import { playCash } from './cashSound.js'
-import { FREE_GIFT, TWIN_STAND, VACUUMS, VACUUM_STAND } from './config.js'
+import { FREE_GIFT, VACUUMS, VACUUM_STAND } from './config.js'
 
-const TWIN_REACH = 4.5 // m from the Rune Shovel showcase to be offered it
 const OPEN = 5.5 // m from the stand to be offered the window
 const CLOSE = 9 // m past which an open window shuts
 
@@ -56,14 +55,4 @@ export function updateVacuums() {
   if (state.vacuumsOpen) {
     if (d > CLOSE) closeVacuums()
   } else if (d < OPEN) offer('Shovels', openVacuums, d)
-
-  // The Rune Shovel showcase sells straight from its label: E buys (if affordable) and equips.
-  const dt = Math.hypot(player.position.x - TWIN_STAND.x, player.position.z - TWIN_STAND.z)
-  if (dt < TWIN_REACH) {
-    const v = VACUUMS.find((x) => x.id === 'twin')
-    const owned = state.vacuumOwned.includes('twin')
-    if (state.vacuum === 'twin') return
-    const locked = !owned && state.level < v.unlockLevel
-    offer(locked ? `${v.name} - Unlocks at Level ${v.unlockLevel}` : owned ? `Equip ${v.name}` : `Buy ${v.name} - $${shortMoney(v.cost)}`, () => pickVacuum('twin'), dt)
-  }
 }
